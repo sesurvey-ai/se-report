@@ -1,0 +1,792 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SE Report</title>
+    <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Segoe UI', Tahoma, sans-serif;
+            background: #0f172a; color: #e2e8f0;
+            display: flex; height: 100vh; overflow: hidden;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            width: 260px; min-width: 260px; background: #1e293b;
+            border-right: 1px solid #334155; display: flex; flex-direction: column;
+            transition: margin-left 0.3s ease;
+        }
+        .sidebar.collapsed { margin-left: -260px; }
+        .sidebar-header {
+            padding: 16px 20px; border-bottom: 1px solid #334155;
+            display: flex; justify-content: space-between; align-items: center;
+        }
+        .sidebar-header h3 { font-size: 14px; color: #94a3b8; text-transform: uppercase; letter-spacing: 1px; }
+        .sidebar-close {
+            background: none; border: none; color: #64748b; font-size: 20px;
+            cursor: pointer; line-height: 1;
+        }
+        .sidebar-close:hover { color: #e2e8f0; }
+        .sidebar-actions {
+            display: flex; gap: 6px; padding: 12px 20px; border-bottom: 1px solid #334155;
+        }
+        .sidebar-actions button {
+            flex: 1; padding: 6px; font-size: 11px; border-radius: 6px;
+            border: 1px solid #475569; background: transparent; color: #94a3b8;
+            cursor: pointer; transition: all 0.15s;
+        }
+        .sidebar-actions button:hover { background: #334155; color: #e2e8f0; }
+        .col-list {
+            list-style: none; flex: 1; overflow-y: auto; padding: 8px 12px;
+        }
+        .col-list li { padding: 1px 0; }
+        .col-list label {
+            font-size: 13px; cursor: pointer; display: flex; align-items: center;
+            gap: 8px; padding: 5px 8px; border-radius: 6px; transition: background 0.15s;
+            color: #cbd5e1;
+        }
+        .col-list label:hover { background: #334155; }
+        .col-list input[type=checkbox] { accent-color: #3b82f6; }
+
+        /* Main */
+        .main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+
+        /* Toolbar */
+        .toolbar {
+            padding: 16px 24px; background: #1e293b;
+            border-bottom: 1px solid #334155;
+            display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+        }
+        .toolbar-toggle {
+            background: none; border: none; color: #94a3b8; cursor: pointer;
+            font-size: 20px; padding: 4px; display: flex; align-items: center;
+        }
+        .toolbar-toggle:hover { color: #e2e8f0; }
+        .toolbar-toggle svg { width: 22px; height: 22px; }
+        .toolbar h1 { font-size: 18px; font-weight: 700; color: #f1f5f9; margin-right: auto; }
+        .toolbar input[type=date] {
+            padding: 7px 12px; border: 1px solid #475569; border-radius: 8px;
+            background: #0f172a; color: #e2e8f0; font-size: 13px;
+        }
+        .toolbar input[type=date]::-webkit-calendar-picker-indicator { filter: invert(0.7); }
+        .toolbar-label { font-size: 12px; color: #64748b; font-weight: 600; text-transform: uppercase; }
+        .toolbar-group { display: flex; align-items: center; gap: 8px; }
+
+        /* Radio pills */
+        .pill-group { display: flex; gap: 0; }
+        .pill-group input { display: none; }
+        .pill-group label {
+            padding: 7px 16px; font-size: 13px; cursor: pointer;
+            background: #0f172a; border: 1px solid #475569; color: #94a3b8;
+            transition: all 0.15s;
+        }
+        .pill-group label:first-of-type { border-radius: 8px 0 0 8px; }
+        .pill-group label:last-of-type { border-radius: 0 8px 8px 0; border-left: none; }
+        .pill-group input:checked + label {
+            background: #3b82f6; border-color: #3b82f6; color: #fff;
+        }
+
+        /* Fetch button */
+        .btn-fetch {
+            padding: 7px 28px; background: #3b82f6; color: #fff; border: none;
+            border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer;
+            transition: background 0.15s;
+        }
+        .btn-fetch:hover { background: #2563eb; }
+        .btn-fetch:disabled { background: #1e3a5f; color: #64748b; cursor: not-allowed; }
+
+        /* Content area */
+        .content { flex: 1; overflow: auto; padding: 16px 24px; }
+        #status { margin-bottom: 12px; font-size: 13px; color: #94a3b8; }
+        #status.error { color: #f87171; }
+
+        /* Table */
+        table {
+            width: 100%; border-collapse: separate; border-spacing: 0;
+            background: #1e293b; border-radius: 10px; overflow: hidden;
+        }
+        thead { position: sticky; top: 0; z-index: 10; }
+        thead th {
+            background: #334155; color: #94a3b8; font-size: 11px;
+            text-transform: uppercase; letter-spacing: 0.5px;
+            padding: 10px 14px; text-align: left; font-weight: 600;
+            border-bottom: 1px solid #475569;
+            position: relative; cursor: pointer; user-select: none;
+        }
+        thead th .th-content {
+            display: flex; align-items: center; justify-content: space-between; gap: 6px;
+        }
+        thead th .filter-icon {
+            width: 14px; height: 14px; opacity: 0.4; flex-shrink: 0;
+            transition: opacity 0.15s;
+        }
+        thead th:hover .filter-icon { opacity: 0.8; }
+        thead th.filtered .filter-icon { opacity: 1; color: #3b82f6; }
+        td {
+            padding: 9px 14px; font-size: 13px; color: #cbd5e1;
+            border-bottom: 1px solid #1e293b; white-space: nowrap;
+        }
+        tbody tr { background: #0f172a; transition: background 0.1s; }
+        tbody tr:nth-child(even) { background: #162032; }
+        tbody tr:hover { background: #1e3a5f; }
+
+        /* Filter dropdown */
+        .filter-dropdown {
+            position: fixed; min-width: 240px;
+            background: #1e293b; border: 1px solid #475569; border-radius: 8px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.4); z-index: 200;
+            padding: 8px 0;
+        }
+        .filter-dropdown .fd-search {
+            padding: 0 10px 8px; border-bottom: 1px solid #334155; margin-bottom: 4px;
+        }
+        .filter-dropdown .fd-search input {
+            width: 100%; padding: 6px 10px; font-size: 12px;
+            background: #0f172a; color: #e2e8f0; border: 1px solid #475569;
+            border-radius: 6px; outline: none;
+        }
+        .filter-dropdown .fd-search input:focus { border-color: #3b82f6; }
+        .filter-dropdown .fd-search input::placeholder { color: #64748b; }
+        .filter-dropdown .fd-list {
+            max-height: 200px; overflow-y: auto; padding: 0 6px;
+            list-style: none;
+        }
+        .filter-dropdown .fd-list li { padding: 0; }
+        .filter-dropdown .fd-list label {
+            display: flex; align-items: center; gap: 8px;
+            padding: 4px 8px; font-size: 12px; color: #cbd5e1;
+            border-radius: 4px; cursor: pointer; white-space: nowrap;
+            overflow: hidden; text-overflow: ellipsis;
+        }
+        .filter-dropdown .fd-list label:hover { background: #334155; }
+        .filter-dropdown .fd-list input[type=checkbox] { accent-color: #3b82f6; flex-shrink: 0; }
+        .filter-dropdown .fd-actions {
+            display: flex; gap: 6px; padding: 8px 10px 4px;
+            border-top: 1px solid #334155; margin-top: 4px;
+        }
+        .filter-dropdown .fd-actions button {
+            flex: 1; padding: 5px; font-size: 11px; border-radius: 6px;
+            cursor: pointer; transition: all 0.15s;
+        }
+        .filter-dropdown .fd-ok {
+            background: #3b82f6; color: #fff; border: none;
+        }
+        .filter-dropdown .fd-ok:hover { background: #2563eb; }
+        .filter-dropdown .fd-cancel {
+            background: transparent; color: #94a3b8; border: 1px solid #475569;
+        }
+        .filter-dropdown .fd-cancel:hover { background: #334155; color: #e2e8f0; }
+
+        /* Dashboard */
+        #dashboardView { display: none; }
+        .dash-cards {
+            display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 14px; margin-bottom: 20px;
+        }
+        .dash-card {
+            background: #1e293b; border: 1px solid #334155; border-radius: 12px;
+            padding: 20px; display: flex; align-items: center; gap: 16px;
+            border-left: 4px solid;
+        }
+        .dash-card.blue { border-left-color: #3b82f6; }
+        .dash-card.green { border-left-color: #22c55e; }
+        .dash-card.amber { border-left-color: #f59e0b; }
+        .dash-card.rose { border-left-color: #f43f5e; }
+        .dash-card .card-icon {
+            width: 44px; height: 44px; border-radius: 10px; display: flex;
+            align-items: center; justify-content: center; flex-shrink: 0;
+        }
+        .dash-card .card-icon svg { width: 22px; height: 22px; }
+        .dash-card.blue .card-icon { background: rgba(59,130,246,0.15); color: #3b82f6; }
+        .dash-card.green .card-icon { background: rgba(34,197,94,0.15); color: #22c55e; }
+        .dash-card.amber .card-icon { background: rgba(245,158,11,0.15); color: #f59e0b; }
+        .dash-card.rose .card-icon { background: rgba(244,63,94,0.15); color: #f43f5e; }
+        .dash-card .card-info { display: flex; flex-direction: column; }
+        .dash-card .card-value { font-size: 28px; font-weight: 800; color: #f1f5f9; line-height: 1.1; }
+        .dash-card .card-label { font-size: 12px; color: #64748b; margin-top: 2px; }
+
+        .dash-charts {
+            display: grid; grid-template-columns: 1fr 1fr; gap: 14px;
+        }
+        .chart-card {
+            background: #1e293b; border: 1px solid #334155; border-radius: 12px;
+            padding: 16px 16px 8px;
+        }
+        .chart-card h4 {
+            font-size: 13px; color: #94a3b8; margin-bottom: 8px; font-weight: 600;
+            text-transform: uppercase; letter-spacing: 0.3px;
+        }
+    </style>
+</head>
+<body>
+    <!-- Sidebar -->
+    <div class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+            <h3>Columns</h3>
+            <button class="sidebar-close" id="closeSidebar">&times;</button>
+        </div>
+        <div class="sidebar-actions">
+            <button type="button" id="checkAll">Select All</button>
+            <button type="button" id="uncheckAll">Deselect All</button>
+        </div>
+        <ul class="col-list" id="colList"></ul>
+    </div>
+
+    <!-- Main -->
+    <div class="main">
+        <div class="toolbar">
+            <button class="toolbar-toggle" id="toggleSidebar" title="Toggle columns">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/>
+                    <rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>
+                </svg>
+            </button>
+            <h1>SE Report</h1>
+            <form id="reportForm" style="display:contents;">
+                <div class="toolbar-group">
+                    <span class="toolbar-label">From</span>
+                    <input type="date" id="date_from" name="date_from" required>
+                </div>
+                <div class="toolbar-group">
+                    <span class="toolbar-label">To</span>
+                    <input type="date" id="date_to" name="date_to" required>
+                </div>
+                <div class="pill-group">
+                    <input type="radio" name="report_type" value="enquiry" id="rt_enquiry" checked>
+                    <label for="rt_enquiry">Enquiry</label>
+                    <input type="radio" name="report_type" value="closeClaim" id="rt_close">
+                    <label for="rt_close">Close Claim</label>
+                </div>
+                <button type="submit" class="btn-fetch" id="submitBtn">Fetch</button>
+            </form>
+            <div class="pill-group" id="viewToggle" style="margin-left:8px;">
+                <input type="radio" name="view" value="table" id="v_table" checked>
+                <label for="v_table">Table</label>
+                <input type="radio" name="view" value="dashboard" id="v_dashboard">
+                <label for="v_dashboard">Dashboard</label>
+            </div>
+        </div>
+
+        <div class="content">
+            <div id="status"></div>
+
+            <div id="tableView">
+                <table id="reportTable" style="display:none;">
+                    <thead id="tableHead"></thead>
+                    <tbody id="tableBody"></tbody>
+                </table>
+            </div>
+
+            <div id="dashboardView">
+                <div id="dashFilterInfo" style="margin-bottom:12px; font-size:13px; color:#64748b;"></div>
+                <div class="dash-cards" id="dashCards"></div>
+                <div class="dash-charts" id="dashCharts"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const COLUMN_MAP = {{ column_map | tojson }};
+        const FILTER_SVG = `<svg class="filter-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>`;
+
+        const form = document.getElementById('reportForm');
+        const status = document.getElementById('status');
+        const thead = document.getElementById('tableHead');
+        const tbody = document.getElementById('tableBody');
+        const table = document.getElementById('reportTable');
+        const btn = document.getElementById('submitBtn');
+        const sidebar = document.getElementById('sidebar');
+        const colList = document.getElementById('colList');
+
+        const today = new Date().toISOString().slice(0, 10);
+        document.getElementById('date_from').value = today;
+        document.getElementById('date_to').value = today;
+
+        // Sidebar
+        document.getElementById('toggleSidebar').addEventListener('click', () => sidebar.classList.toggle('collapsed'));
+        document.getElementById('closeSidebar').addEventListener('click', () => sidebar.classList.add('collapsed'));
+        document.getElementById('checkAll').addEventListener('click', () => {
+            colList.querySelectorAll('input[type=checkbox]').forEach(cb => cb.checked = true);
+            if (lastRecords) renderTable();
+        });
+        document.getElementById('uncheckAll').addEventListener('click', () => {
+            colList.querySelectorAll('input[type=checkbox]').forEach(cb => cb.checked = false);
+            if (lastRecords) renderTable();
+        });
+
+        function buildColumnCheckboxes(reportType) {
+            const cols = COLUMN_MAP[reportType] || [];
+            colList.innerHTML = '';
+            cols.forEach(([key, label]) => {
+                const li = document.createElement('li');
+                const lbl = document.createElement('label');
+                const cb = document.createElement('input');
+                cb.type = 'checkbox'; cb.value = key; cb.dataset.label = label; cb.checked = true;
+                lbl.appendChild(cb);
+                lbl.appendChild(document.createTextNode(label));
+                li.appendChild(lbl);
+                colList.appendChild(li);
+            });
+        }
+
+        function getSelectedColumns() {
+            const selected = [];
+            colList.querySelectorAll('input[type=checkbox]:checked').forEach(cb => {
+                selected.push({ key: cb.value, label: cb.dataset.label });
+            });
+            return selected;
+        }
+
+        buildColumnCheckboxes('enquiry');
+
+        document.querySelectorAll('input[name=report_type]').forEach(radio => {
+            radio.addEventListener('change', (e) => {
+                buildColumnCheckboxes(e.target.value);
+                thead.innerHTML = ''; tbody.innerHTML = '';
+                table.style.display = 'none'; status.textContent = '';
+                lastRecords = null; columnFilters = {};
+                document.getElementById('dashFilterInfo').textContent = '';
+                document.getElementById('dashCards').innerHTML = '';
+                document.getElementById('dashCharts').innerHTML = '';
+                destroyCharts();
+            });
+        });
+
+        // --- Column filter state: { key: Set of allowed values } ---
+        let lastRecords = null;
+        let columnFilters = {};
+        let openDropdown = null;
+
+        let openDropdownTh = null;
+
+        // Close dropdown on outside click
+        document.addEventListener('click', (e) => {
+            if (openDropdown && !openDropdown.contains(e.target) && !e.target.closest('th')) {
+                closeDropdown();
+            }
+        });
+
+        function getUniqueValues(key) {
+            if (!lastRecords) return [];
+            const vals = new Set();
+            let hasBlank = false;
+            lastRecords.forEach(r => {
+                const v = r[key];
+                if (v === null || v === undefined || String(v).trim() === '') hasBlank = true;
+                else vals.add(String(v));
+            });
+            const sorted = [...vals].sort((a, b) => a.localeCompare(b, 'th'));
+            if (hasBlank) sorted.push('');
+            return sorted;
+        }
+
+        function openFilterDropdown(th, colKey) {
+            // close any open
+            closeDropdown();
+
+            const rect = th.getBoundingClientRect();
+            const dd = document.createElement('div');
+            dd.className = 'filter-dropdown';
+            // position near the column header
+            let left = rect.left;
+            if (left + 240 > window.innerWidth) left = window.innerWidth - 250;
+            dd.style.top = rect.bottom + 4 + 'px';
+            dd.style.left = left + 'px';
+            dd.addEventListener('click', e => e.stopPropagation());
+
+            const uniqueVals = getUniqueValues(colKey);
+            const currentFilter = columnFilters[colKey];
+
+            // search
+            const searchDiv = document.createElement('div');
+            searchDiv.className = 'fd-search';
+            const searchInput = document.createElement('input');
+            searchInput.type = 'text'; searchInput.placeholder = 'Search...';
+            searchDiv.appendChild(searchInput);
+            dd.appendChild(searchDiv);
+
+            // list
+            const ul = document.createElement('ul');
+            ul.className = 'fd-list';
+
+            // (Select All)
+            const selAllLi = document.createElement('li');
+            const selAllLabel = document.createElement('label');
+            const selAllCb = document.createElement('input');
+            selAllCb.type = 'checkbox';
+            selAllCb.checked = !currentFilter;
+            selAllCb.dataset.selectAll = '1';
+            selAllLabel.appendChild(selAllCb);
+            selAllLabel.appendChild(document.createTextNode('(Select All)'));
+            selAllLi.appendChild(selAllLabel);
+            ul.appendChild(selAllLi);
+
+            // value items
+            uniqueVals.forEach(val => {
+                const li = document.createElement('li');
+                const lbl = document.createElement('label');
+                const cb = document.createElement('input');
+                cb.type = 'checkbox'; cb.dataset.val = val;
+                cb.checked = !currentFilter || currentFilter.has(val);
+                lbl.appendChild(cb);
+                lbl.appendChild(document.createTextNode(val === '' ? '(Blanks)' : val));
+                li.appendChild(lbl);
+                ul.appendChild(li);
+            });
+
+            dd.appendChild(ul);
+
+            // select all logic
+            selAllCb.addEventListener('change', () => {
+                ul.querySelectorAll('input[data-val]').forEach(cb => {
+                    if (cb.closest('li').style.display !== 'none') cb.checked = selAllCb.checked;
+                });
+            });
+
+            // search filter
+            searchInput.addEventListener('input', () => {
+                const q = searchInput.value.toLowerCase();
+                ul.querySelectorAll('li').forEach(li => {
+                    if (li.querySelector('[data-select-all]')) return;
+                    const text = li.textContent.toLowerCase();
+                    li.style.display = text.includes(q) ? '' : 'none';
+                });
+            });
+
+            // actions
+            const actionsDiv = document.createElement('div');
+            actionsDiv.className = 'fd-actions';
+
+            const okBtn = document.createElement('button');
+            okBtn.textContent = 'OK'; okBtn.className = 'fd-ok';
+            okBtn.addEventListener('click', () => {
+                const checked = new Set();
+                ul.querySelectorAll('input[data-val]').forEach(cb => {
+                    if (cb.checked) checked.add(cb.dataset.val);
+                });
+                if (checked.size === uniqueVals.length) {
+                    delete columnFilters[colKey];
+                    th.classList.remove('filtered');
+                } else {
+                    columnFilters[colKey] = checked;
+                    th.classList.add('filtered');
+                }
+                closeDropdown();
+                renderRows();
+            });
+
+            const cancelBtn = document.createElement('button');
+            cancelBtn.textContent = 'Cancel'; cancelBtn.className = 'fd-cancel';
+            cancelBtn.addEventListener('click', () => closeDropdown());
+
+            actionsDiv.appendChild(okBtn);
+            actionsDiv.appendChild(cancelBtn);
+            dd.appendChild(actionsDiv);
+
+            document.body.appendChild(dd);
+            openDropdown = dd;
+            openDropdownTh = th;
+            searchInput.focus();
+        }
+
+        function closeDropdown() {
+            if (openDropdown) { openDropdown.remove(); openDropdown = null; openDropdownTh = null; }
+        }
+
+        function applyColumnFilters(records) {
+            const keys = Object.keys(columnFilters);
+            if (keys.length === 0) return records;
+            return records.filter(record =>
+                keys.every(key => {
+                    const allowed = columnFilters[key];
+                    const val = record[key];
+                    const str = (val === null || val === undefined || String(val).trim() === '') ? '' : String(val);
+                    return allowed.has(str);
+                })
+            );
+        }
+
+        let currentSelected = [];
+
+        function renderTable() {
+            if (!lastRecords || lastRecords.length === 0) return;
+            currentSelected = getSelectedColumns();
+            if (currentSelected.length === 0) {
+                thead.innerHTML = ''; tbody.innerHTML = '';
+                table.style.display = 'none';
+                status.textContent = `Total: ${lastRecords.length} records (no columns selected)`;
+                return;
+            }
+
+            thead.innerHTML = '';
+            tbody.innerHTML = '';
+
+            const headerRow = document.createElement('tr');
+            currentSelected.forEach(col => {
+                const th = document.createElement('th');
+                const content = document.createElement('div');
+                content.className = 'th-content';
+                content.innerHTML = `<span>${col.label}</span>${FILTER_SVG}`;
+                th.appendChild(content);
+                th.dataset.key = col.key;
+                if (columnFilters[col.key]) th.classList.add('filtered');
+                th.addEventListener('click', (e) => {
+                    if (e.target.closest('.filter-dropdown')) return;
+                    openFilterDropdown(th, col.key);
+                });
+                headerRow.appendChild(th);
+            });
+            thead.appendChild(headerRow);
+
+            renderRows();
+            table.style.display = 'table';
+        }
+
+        function renderRows() {
+            tbody.innerHTML = '';
+            const filtered = applyColumnFilters(lastRecords);
+            const selected = currentSelected.length ? currentSelected : getSelectedColumns();
+
+            filtered.forEach(record => {
+                const tr = document.createElement('tr');
+                selected.forEach(col => {
+                    const td = document.createElement('td');
+                    td.textContent = record[col.key] ?? '';
+                    tr.appendChild(td);
+                });
+                tbody.appendChild(tr);
+            });
+
+            status.textContent = `Showing ${filtered.length} of ${lastRecords.length} records`;
+        }
+
+        colList.addEventListener('change', () => {
+            if (lastRecords) renderTable();
+        });
+
+        // ========== VIEW TOGGLE ==========
+        const tableView = document.getElementById('tableView');
+        const dashboardView = document.getElementById('dashboardView');
+
+        document.querySelectorAll('input[name=view]').forEach(radio => {
+            radio.addEventListener('change', (e) => {
+                if (e.target.value === 'dashboard') {
+                    tableView.style.display = 'none';
+                    dashboardView.style.display = 'block';
+                    if (lastRecords) buildDashboard();
+                } else {
+                    tableView.style.display = 'block';
+                    dashboardView.style.display = 'none';
+                }
+            });
+        });
+
+        // ========== DASHBOARD ==========
+        const COLORS = ['#3b82f6','#22c55e','#f59e0b','#f43f5e','#a855f7','#06b6d4','#ec4899','#84cc16','#f97316','#6366f1'];
+        let chartInstances = [];
+
+        const CARD_ICONS = {
+            total: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/></svg>',
+            completed: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>',
+            pending: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>',
+            time: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 22h14"/><path d="M5 2h14"/><path d="M17 22v-4.172a2 2 0 0 0-.586-1.414L12 12l-4.414 4.414A2 2 0 0 0 7 17.828V22"/><path d="M7 2v4.172a2 2 0 0 0 .586 1.414L12 12l4.414-4.414A2 2 0 0 0 17 6.172V2"/></svg>',
+            sent: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>',
+        };
+
+        function getDashFilteredRecords() {
+            if (!lastRecords) return [];
+            return applyColumnFilters(lastRecords);
+        }
+
+        function updateDashFilterInfo(total, filtered) {
+            const info = document.getElementById('dashFilterInfo');
+            const activeFilters = Object.keys(columnFilters);
+            if (activeFilters.length === 0) {
+                info.textContent = '';
+            } else {
+                info.innerHTML = `Filtered: <strong style="color:#e2e8f0;">${filtered}</strong> of ${total} records (${activeFilters.length} filter active) — <a href="#" id="dashClearFilter" style="color:#3b82f6;">clear filters</a>`;
+                document.getElementById('dashClearFilter').addEventListener('click', (e) => {
+                    e.preventDefault();
+                    columnFilters = {};
+                    renderTable();
+                    buildDashboard();
+                });
+            }
+        }
+
+        function destroyCharts() { chartInstances.forEach(c => c.destroy()); chartInstances = []; }
+
+        function countBy(records, key, top) {
+            const counts = {};
+            records.forEach(r => {
+                const v = r[key];
+                const label = (v == null || String(v).trim() === '') ? '(ว่าง)' : String(v);
+                counts[label] = (counts[label] || 0) + 1;
+            });
+            let entries = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+            if (top) entries = entries.slice(0, top);
+            return { labels: entries.map(e => e[0]), data: entries.map(e => e[1]) };
+        }
+
+        function avgTravelTime(records) {
+            let total = 0, count = 0;
+            records.forEach(r => {
+                const t = r.travel_time; if (!t) return;
+                const p = String(t).split(':');
+                if (p.length === 2) { total += parseInt(p[0]) * 60 + parseInt(p[1]); count++; }
+            });
+            if (!count) return '-';
+            const avg = Math.round(total / count), h = Math.floor(avg / 60), m = avg % 60;
+            return h > 0 ? `${h}h ${m}m` : `${m}m`;
+        }
+
+        function addCard(container, value, label, color, icon) {
+            const card = document.createElement('div');
+            card.className = `dash-card ${color}`;
+            card.innerHTML = `<div class="card-icon">${CARD_ICONS[icon] || CARD_ICONS.total}</div><div class="card-info"><span class="card-value">${value}</span><span class="card-label">${label}</span></div>`;
+            container.appendChild(card);
+        }
+
+        function createDonut(container, title, labels, data) {
+            const card = document.createElement('div');
+            card.className = 'chart-card';
+            card.innerHTML = `<h4>${title}</h4><div></div>`;
+            container.appendChild(card);
+            const chart = new ApexCharts(card.lastChild, {
+                chart: { type: 'donut', height: 300, background: 'transparent', foreColor: '#94a3b8' },
+                series: data, labels,
+                colors: COLORS.slice(0, data.length),
+                legend: { position: 'right', fontSize: '12px', labels: { colors: '#94a3b8' } },
+                dataLabels: { enabled: false },
+                stroke: { width: 2, colors: ['#1e293b'] },
+                plotOptions: { pie: { donut: { size: '60%' } } },
+                tooltip: { theme: 'dark' },
+                theme: { mode: 'dark' },
+            });
+            chart.render(); chartInstances.push(chart);
+        }
+
+        function createBar(container, title, labels, data) {
+            const card = document.createElement('div');
+            card.className = 'chart-card';
+            card.innerHTML = `<h4>${title}</h4><div></div>`;
+            container.appendChild(card);
+            const chart = new ApexCharts(card.lastChild, {
+                chart: { type: 'bar', height: 300, background: 'transparent', foreColor: '#94a3b8', toolbar: { show: true } },
+                series: [{ name: 'จำนวน', data }],
+                xaxis: { categories: labels },
+                plotOptions: { bar: { horizontal: true, borderRadius: 4, barHeight: '65%' } },
+                colors: ['#3b82f6'],
+                dataLabels: { enabled: true, style: { fontSize: '11px', colors: ['#fff'] } },
+                grid: { borderColor: '#334155', xaxis: { lines: { show: true } }, yaxis: { lines: { show: false } } },
+                tooltip: { theme: 'dark' },
+                theme: { mode: 'dark' },
+            });
+            chart.render(); chartInstances.push(chart);
+        }
+
+        function createTreemap(container, title, labels, data) {
+            const card = document.createElement('div');
+            card.className = 'chart-card';
+            card.innerHTML = `<h4>${title}</h4><div></div>`;
+            container.appendChild(card);
+            const series = labels.map((l, i) => ({ x: l, y: data[i] }));
+            const chart = new ApexCharts(card.lastChild, {
+                chart: { type: 'treemap', height: 300, background: 'transparent', foreColor: '#94a3b8', toolbar: { show: false } },
+                series: [{ data: series }],
+                colors: COLORS,
+                plotOptions: { treemap: { distributed: true, enableShades: false } },
+                dataLabels: { enabled: true, style: { fontSize: '12px' } },
+                tooltip: { theme: 'dark' },
+                theme: { mode: 'dark' },
+            });
+            chart.render(); chartInstances.push(chart);
+        }
+
+        function buildDashboard() {
+            if (!lastRecords || lastRecords.length === 0) return;
+            destroyCharts();
+            const cards = document.getElementById('dashCards');
+            const charts = document.getElementById('dashCharts');
+            cards.innerHTML = ''; charts.innerHTML = '';
+
+            const rt = document.querySelector('input[name=report_type]:checked').value;
+            const records = getDashFilteredRecords();
+            updateDashFilterInfo(lastRecords.length, records.length);
+
+            if (rt === 'enquiry') {
+                const completed = records.filter(r => r.finish_dt && String(r.finish_dt).trim()).length;
+                addCard(cards, records.length, 'Total Claims', 'blue', 'total');
+                addCard(cards, completed, 'Completed', 'green', 'completed');
+                addCard(cards, records.length - completed, 'Pending', 'amber', 'pending');
+                addCard(cards, avgTravelTime(records), 'Avg Travel Time', 'rose', 'time');
+
+                const s1 = countBy(records, 'stt_desc');
+                createDonut(charts, 'สถานะงาน', s1.labels, s1.data);
+                const s2 = countBy(records, 'acc_province', 10);
+                createBar(charts, 'จังหวัดที่เกิดเหตุ (Top 10)', s2.labels, s2.data);
+                const s3 = countBy(records, 'claim_Type');
+                createDonut(charts, 'ประเภทเคลม', s3.labels, s3.data);
+                const s4 = countBy(records, 'acc_zone');
+                createDonut(charts, 'เขตพื้นที่', s4.labels, s4.data);
+                const s5 = countBy(records, 'branch', 10);
+                createBar(charts, 'ศูนย์ (Top 10)', s5.labels, s5.data);
+                const s6 = countBy(records, 'empcode', 10);
+                createTreemap(charts, 'พนักงานตรวจสอบ (Top 10)', s6.labels, s6.data);
+            } else {
+                const sent = records.filter(r => r.sendReport_dt && String(r.sendReport_dt).trim()).length;
+                addCard(cards, records.length, 'Total Closed', 'blue', 'total');
+                addCard(cards, avgTravelTime(records), 'Avg Travel Time', 'green', 'time');
+                addCard(cards, sent, 'Reports Sent', 'amber', 'sent');
+
+                const c1 = countBy(records, 'empname', 10);
+                createBar(charts, 'ผู้ปิดงาน (Top 10)', c1.labels, c1.data);
+                const c2 = countBy(records, 'notified_name', 10);
+                createBar(charts, 'ผู้รับแจ้ง (Top 10)', c2.labels, c2.data);
+                const c3 = countBy(records, 'acc_place', 10);
+                createTreemap(charts, 'สถานที่เกิดเหตุ (Top 10)', c3.labels, c3.data);
+            }
+        }
+
+        // ========== FORM SUBMIT ==========
+        form.addEventListener('submit', async function (e) {
+            e.preventDefault();
+            status.className = '';
+            status.textContent = 'Loading...';
+            thead.innerHTML = ''; tbody.innerHTML = '';
+            table.style.display = 'none';
+            btn.disabled = true;
+            lastRecords = null;
+            columnFilters = {};
+
+            const formData = new FormData(this);
+            try {
+                const res = await fetch('/fetch', { method: 'POST', body: formData });
+                const json = await res.json();
+                if (json.error) throw new Error(json.error);
+                const records = json.data;
+                if (!records || records.length === 0) {
+                    status.textContent = 'No data found.';
+                    return;
+                }
+                lastRecords = records;
+                renderTable();
+                const activeView = document.querySelector('input[name=view]:checked').value;
+                if (activeView === 'dashboard') {
+                    tableView.style.display = 'none';
+                    dashboardView.style.display = 'block';
+                    buildDashboard();
+                }
+            } catch (err) {
+                status.className = 'error';
+                status.textContent = 'Error: ' + err.message;
+            } finally {
+                btn.disabled = false;
+            }
+        });
+    </script>
+</body>
+</html>
