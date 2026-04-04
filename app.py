@@ -1,10 +1,14 @@
+import json
 import os
+import time
 from datetime import datetime
 from functools import wraps
 
 import requests
 from dotenv import load_dotenv
 from flask import Flask, Response, jsonify, render_template, request
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
 load_dotenv()
 
@@ -31,6 +35,15 @@ BASE_URL = 'https://cloud.isurvey.mobi/web/php'
 class ISurveyClient:
     def __init__(self):
         self.session = requests.Session()
+        retry = Retry(
+            total=3,
+            backoff_factor=1,
+            status_forcelist=[502, 503, 504],
+            allowed_methods=["GET", "POST"],
+        )
+        adapter = HTTPAdapter(max_retries=retry)
+        self.session.mount("https://", adapter)
+        self.session.mount("http://", adapter)
         self._logged_in = False
 
     def login(self):
@@ -191,6 +204,114 @@ def fetch():
 
     columns = COLUMN_MAP.get(report_type)
     return jsonify({'total': total, 'data': records, 'columns': columns})
+
+
+@app.route('/fetch-stream', methods=['POST'])
+@check_basic_auth
+def fetch_stream():
+    date_from = request.form.get('date_from', '')
+    date_to = request.form.get('date_to', '')
+    report_type = request.form.get('report_type', 'enquiry')
+
+    try:
+        df_date = datetime.strptime(date_from, '%Y-%m-%d')
+        dt_date = datetime.strptime(date_to, '%Y-%m-%d')
+        df = df_date.strftime('%d/%m/%Y')
+        dt = dt_date.strftime('%d/%m/%Y')
+    except ValueError:
+        def error_gen():
+            yield f"event: error\ndata: {json.dumps({'error': 'รูปแบบวันที่ไม่ถูกต้อง'})}\n\n"
+        return Response(error_gen(), mimetype='text/event-stream')
+
+    if (dt_date - df_date).days > 730:
+        def range_error():
+            yield f"event: error\ndata: {json.dumps({'error': 'ช่วงวันที่เกิน 2 ปี กรุณาเลือกช่วงที่สั้นกว่านี้'})}\n\n"
+        return Response(range_error(), mimetype='text/event-stream')
+
+    def generate():
+        try:
+            client.login()
+        except Exception as e:
+            client._logged_in = False
+            yield f"event: error\ndata: {json.dumps({'error': f'Login failed: {e}'})}\n\n"
+            return
+
+        deadline = time.monotonic() + 540
+        all_records = []
+        page = 1
+        start = 0
+        limit = 200
+
+        while True:
+            if time.monotonic() > deadline:
+                yield f"event: error\ndata: {json.dumps({'error': 'Request timed out (เกิน 9 นาที) ลองเลือกช่วงวันที่สั้นลง'})}\n\n"
+                return
+
+            params = {
+                'con_date': 2,
+                'date_from': df,
+                'date_to': dt,
+                'report_type': report_type,
+                'page': page,
+                'start': start,
+                'limit': limit,
+            }
+
+            try:
+                res = client.session.get(
+                    f'{BASE_URL}/report/get_data_report.php',
+                    params=params,
+                    timeout=60,
+                )
+                res.raise_for_status()
+            except requests.exceptions.HTTPError as e:
+                if e.response is not None and e.response.status_code in (401, 403):
+                    client._logged_in = False
+                    try:
+                        client.login()
+                        res = client.session.get(
+                            f'{BASE_URL}/report/get_data_report.php',
+                            params=params,
+                            timeout=60,
+                        )
+                        res.raise_for_status()
+                    except Exception as inner_e:
+                        yield f"event: error\ndata: {json.dumps({'error': str(inner_e)})}\n\n"
+                        return
+                else:
+                    yield f"event: error\ndata: {json.dumps({'error': str(e)})}\n\n"
+                    return
+            except Exception as e:
+                client._logged_in = False
+                yield f"event: error\ndata: {json.dumps({'error': str(e)})}\n\n"
+                return
+
+            body = res.json()
+            if isinstance(body, dict):
+                records = body.get('arr_data', body.get('data', []))
+                total = body.get('total', body.get('totalCount', 0))
+            else:
+                records = body
+                total = len(body)
+
+            all_records.extend(records)
+
+            yield f"event: progress\ndata: {json.dumps({'fetched': len(all_records), 'total': total, 'page': page})}\n\n"
+
+            if not records or len(all_records) >= total:
+                break
+
+            page += 1
+            start += limit
+
+        columns = COLUMN_MAP.get(report_type)
+        yield f"event: done\ndata: {json.dumps({'total': len(all_records), 'data': all_records, 'columns': columns})}\n\n"
+
+    return Response(
+        generate(),
+        mimetype='text/event-stream',
+        headers={'Cache-Control': 'no-cache', 'X-Accel-Buffering': 'no'},
+    )
 
 
 if __name__ == '__main__':

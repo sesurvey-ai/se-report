@@ -5,6 +5,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SE Report</title>
     <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/jquery-ui-dist/jquery-ui.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/pivottable/dist/pivot.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jquery-ui-dist/jquery-ui.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/pivottable/dist/pivot.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/plotly.js-dist-min/plotly.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/pivottable/dist/plotly_renderers.min.js"></script>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
@@ -97,6 +105,33 @@
         }
         .btn-fetch:hover { background: #2563eb; }
         .btn-fetch:disabled { background: #1e3a5f; color: #64748b; cursor: not-allowed; }
+
+        /* Progress bar */
+        .progress-container {
+            display: none; align-items: center; gap: 12px; margin-bottom: 12px;
+        }
+        .progress-container.active { display: flex; }
+        .progress-bar-wrap {
+            flex: 1; height: 8px; background: #334155; border-radius: 4px; overflow: hidden;
+        }
+        .progress-bar-fill {
+            height: 100%; width: 0%; background: #3b82f6; border-radius: 4px;
+            transition: width 0.3s ease;
+        }
+        .progress-text { font-size: 12px; color: #94a3b8; min-width: 180px; }
+        .btn-cancel {
+            padding: 5px 16px; background: #dc2626; color: #fff; border: none;
+            border-radius: 6px; font-size: 12px; cursor: pointer; white-space: nowrap;
+        }
+        .btn-cancel:hover { background: #b91c1c; }
+
+        /* Export button */
+        .btn-export {
+            padding: 7px 20px; background: #22c55e; color: #fff; border: none;
+            border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer;
+            transition: background 0.15s; display: none;
+        }
+        .btn-export:hover { background: #16a34a; }
 
         /* Content area */
         .content { flex: 1; overflow: auto; padding: 16px 24px; }
@@ -219,6 +254,146 @@
             font-size: 13px; color: #94a3b8; margin-bottom: 8px; font-weight: 600;
             text-transform: uppercase; letter-spacing: 0.3px;
         }
+        /* Pivot dark theme */
+        #pivotView { overflow: auto; }
+        #pivotOutput .pvtUi { color: #e2e8f0; background: transparent; border: none; }
+        #pivotOutput .pvtUi td, #pivotOutput .pvtUi th { background: transparent; }
+        #pivotOutput select, #pivotOutput .pvtSearch input {
+            background: #1e293b; color: #e2e8f0; border: 1px solid #475569; border-radius: 4px;
+            padding: 4px 6px;
+        }
+        #pivotOutput .pvtAxisContainer, #pivotOutput .pvtVals {
+            background: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 8px;
+        }
+        #pivotOutput .pvtAxisContainer li span.pvtAttr {
+            background: #334155; border: 1px solid #475569; color: #e2e8f0; border-radius: 6px;
+            padding: 4px 10px; font-size: 12px;
+        }
+        #pivotOutput .pvtAxisContainer li span.pvtAttr:hover { background: #3b82f6; border-color: #3b82f6; }
+        #pivotOutput table.pvtTable {
+            background: #1e293b; border-collapse: separate; border-spacing: 0;
+            border-radius: 8px; overflow: hidden; font-size: 12px;
+        }
+        #pivotOutput table.pvtTable thead th {
+            background: #334155; color: #94a3b8; border: 1px solid #475569;
+            padding: 6px 10px; font-weight: 600;
+        }
+        #pivotOutput table.pvtTable tbody td {
+            background: #0f172a; color: #cbd5e1; border: 1px solid #1e293b; padding: 6px 10px;
+        }
+        #pivotOutput table.pvtTable tbody td.pvtTotal,
+        #pivotOutput table.pvtTable tbody th.pvtTotalLabel,
+        #pivotOutput table.pvtTable thead th.pvtTotalLabel {
+            background: #162032; color: #f1f5f9; font-weight: 700;
+        }
+        #pivotOutput .pvtFilterBox {
+            background: #1e293b; border: 1px solid #475569; border-radius: 8px;
+            color: #e2e8f0; box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+        }
+        #pivotOutput .pvtFilterBox button {
+            background: #3b82f6; color: #fff; border: none; border-radius: 6px;
+            padding: 4px 12px; cursor: pointer;
+        }
+        #pivotOutput .pvtFilterBox input[type=text] {
+            background: #0f172a; color: #e2e8f0; border: 1px solid #475569; border-radius: 4px;
+        }
+        #pivotOutput .pvtCheckContainer label { color: #cbd5e1; }
+        #pivotOutput .pvtRendererArea { padding: 0; }
+
+        /* Theme & Font controls */
+        .toolbar-controls {
+            display: flex; align-items: center; gap: 6px; margin-left: auto;
+        }
+        .toolbar-controls button {
+            background: none; border: 1px solid #475569; color: #94a3b8;
+            border-radius: 6px; width: 32px; height: 32px; cursor: pointer;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 14px; transition: all 0.15s;
+        }
+        .toolbar-controls button:hover { background: #334155; color: #e2e8f0; }
+        .toolbar-controls .font-label {
+            font-size: 11px; color: #64748b; font-weight: 600; margin: 0 2px;
+        }
+
+        /* Light theme */
+        body.light { background: #f1f5f9; color: #1e293b; }
+        body.light .sidebar { background: #fff; border-right-color: #e2e8f0; }
+        body.light .sidebar-header { border-bottom-color: #e2e8f0; }
+        body.light .sidebar-header h3 { color: #64748b; }
+        body.light .sidebar-close { color: #94a3b8; }
+        body.light .sidebar-close:hover { color: #1e293b; }
+        body.light .sidebar-actions button { border-color: #cbd5e1; color: #64748b; }
+        body.light .sidebar-actions button:hover { background: #f1f5f9; color: #1e293b; }
+        body.light .sidebar-actions { border-bottom-color: #e2e8f0; }
+        body.light .col-list label { color: #334155; }
+        body.light .col-list label:hover { background: #f1f5f9; }
+        body.light .toolbar { background: #fff; border-bottom-color: #e2e8f0; }
+        body.light .toolbar h1 { color: #0f172a; }
+        body.light .toolbar input[type=date] { background: #f8fafc; border-color: #cbd5e1; color: #1e293b; }
+        body.light .toolbar input[type=date]::-webkit-calendar-picker-indicator { filter: none; }
+        body.light .toolbar-label { color: #94a3b8; }
+        body.light .toolbar-controls button { border-color: #cbd5e1; color: #64748b; }
+        body.light .toolbar-controls button:hover { background: #f1f5f9; color: #1e293b; }
+        body.light .pill-group label { background: #f8fafc; border-color: #cbd5e1; color: #64748b; }
+        body.light .pill-group input:checked + label { background: #3b82f6; border-color: #3b82f6; color: #fff; }
+        body.light .content { background: #f1f5f9; }
+        body.light #status { color: #64748b; }
+        body.light table { background: #fff; }
+        body.light thead th { background: #f1f5f9; color: #64748b; border-bottom-color: #e2e8f0; }
+        body.light td { color: #334155; border-bottom-color: #f1f5f9; }
+        body.light tbody tr { background: #fff; }
+        body.light tbody tr:nth-child(even) { background: #f8fafc; }
+        body.light tbody tr:hover { background: #eff6ff; }
+        body.light .filter-dropdown { background: #fff; border-color: #e2e8f0; box-shadow: 0 8px 24px rgba(0,0,0,0.1); }
+        body.light .filter-dropdown .fd-search { border-bottom-color: #e2e8f0; }
+        body.light .filter-dropdown .fd-search input { background: #f8fafc; color: #1e293b; border-color: #cbd5e1; }
+        body.light .filter-dropdown .fd-list label { color: #334155; }
+        body.light .filter-dropdown .fd-list label:hover { background: #f1f5f9; }
+        body.light .filter-dropdown .fd-actions { border-top-color: #e2e8f0; }
+        body.light .filter-dropdown .fd-cancel { color: #64748b; border-color: #cbd5e1; }
+        body.light .filter-dropdown .fd-cancel:hover { background: #f1f5f9; color: #1e293b; }
+        body.light .dash-card { background: #fff; border-color: #e2e8f0; }
+        body.light .dash-card .card-value { color: #0f172a; }
+        body.light .dash-card .card-label { color: #94a3b8; }
+        body.light .chart-card { background: #fff; border-color: #e2e8f0; }
+        body.light .chart-card h4 { color: #64748b; }
+        body.light .progress-bar-wrap { background: #e2e8f0; }
+        body.light .progress-text { color: #64748b; }
+        body.light #pivotOutput .pvtUi { color: #1e293b; }
+        body.light #pivotOutput .pvtAxisContainer,
+        body.light #pivotOutput .pvtVals { background: #fff; border-color: #e2e8f0; }
+        body.light #pivotOutput .pvtAxisContainer li span.pvtAttr { background: #f1f5f9; border-color: #cbd5e1; color: #334155; }
+        body.light #pivotOutput .pvtAxisContainer li span.pvtAttr:hover { background: #3b82f6; border-color: #3b82f6; color: #fff; }
+        body.light #pivotOutput select,
+        body.light #pivotOutput .pvtSearch input { background: #f8fafc; color: #1e293b; border-color: #cbd5e1; }
+        body.light #pivotOutput table.pvtTable { background: #fff; }
+        body.light #pivotOutput table.pvtTable thead th { background: #f1f5f9; color: #64748b; border-color: #e2e8f0; }
+        body.light #pivotOutput table.pvtTable tbody td { background: #fff; color: #334155; border-color: #f1f5f9; }
+        body.light #pivotOutput table.pvtTable tbody td.pvtTotal,
+        body.light #pivotOutput table.pvtTable tbody th.pvtTotalLabel,
+        body.light #pivotOutput table.pvtTable thead th.pvtTotalLabel { background: #f8fafc; color: #0f172a; }
+        body.light #pivotOutput .pvtFilterBox { background: #fff; border-color: #e2e8f0; color: #1e293b; box-shadow: 0 8px 24px rgba(0,0,0,0.1); }
+        body.light #pivotOutput .pvtFilterBox input[type=text] { background: #f8fafc; color: #1e293b; border-color: #cbd5e1; }
+        body.light #pivotOutput .pvtCheckContainer label { color: #334155; }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .sidebar {
+                position: fixed; top: 0; left: 0; bottom: 0; z-index: 100;
+            }
+            .sidebar.collapsed { margin-left: 0; transform: translateX(-260px); }
+            .toolbar { padding: 12px 16px; gap: 10px; }
+            .toolbar h1 { font-size: 16px; width: 100%; margin-right: 0; }
+            .toolbar-group { flex: 1; min-width: 0; }
+            .toolbar input[type=date] { width: 100%; min-width: 0; }
+            .pill-group label { padding: 7px 10px; font-size: 12px; }
+            .btn-fetch, .btn-export { flex: 1; }
+            .content { padding: 12px 16px; }
+            table { display: block; overflow-x: auto; }
+            .dash-charts { grid-template-columns: 1fr; }
+            .dash-cards { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+            .dash-card .card-value { font-size: 22px; }
+        }
     </style>
 </head>
 <body>
@@ -262,16 +437,36 @@
                 </div>
                 <button type="submit" class="btn-fetch" id="submitBtn">Fetch</button>
             </form>
+            <button class="btn-export" id="exportBtn">Export Excel</button>
             <div class="pill-group" id="viewToggle" style="margin-left:8px;">
                 <input type="radio" name="view" value="table" id="v_table" checked>
                 <label for="v_table">Table</label>
                 <input type="radio" name="view" value="dashboard" id="v_dashboard">
                 <label for="v_dashboard">Dashboard</label>
+                <input type="radio" name="view" value="pivot" id="v_pivot">
+                <label for="v_pivot" style="border-left:none;">Pivot</label>
+            </div>
+            <div class="toolbar-controls">
+                <button id="fontDown" title="ลดขนาดตัวอักษร">A-</button>
+                <span class="font-label" id="fontSizeLabel">13</span>
+                <button id="fontUp" title="เพิ่มขนาดตัวอักษร">A+</button>
+                <button id="themeToggle" title="สลับธีม">
+                    <svg id="themeIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+                        <circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+                    </svg>
+                </button>
             </div>
         </div>
 
         <div class="content">
             <div id="status"></div>
+            <div class="progress-container" id="progressContainer">
+                <div class="progress-bar-wrap">
+                    <div class="progress-bar-fill" id="progressFill"></div>
+                </div>
+                <span class="progress-text" id="progressText">Connecting...</span>
+                <button class="btn-cancel" id="cancelBtn">Cancel</button>
+            </div>
 
             <div id="tableView">
                 <table id="reportTable" style="display:none;">
@@ -284,6 +479,10 @@
                 <div id="dashFilterInfo" style="margin-bottom:12px; font-size:13px; color:#64748b;"></div>
                 <div class="dash-cards" id="dashCards"></div>
                 <div class="dash-charts" id="dashCharts"></div>
+            </div>
+
+            <div id="pivotView" style="display:none;">
+                <div id="pivotOutput"></div>
             </div>
         </div>
     </div>
@@ -305,26 +504,80 @@
         document.getElementById('date_from').value = today;
         document.getElementById('date_to').value = today;
 
+        // ========== THEME TOGGLE ==========
+        const MOON_SVG = '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79Z"/>';
+        const SUN_SVG = '<circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>';
+        const themeIcon = document.getElementById('themeIcon');
+
+        function applyTheme(theme) {
+            document.body.classList.toggle('light', theme === 'light');
+            themeIcon.innerHTML = theme === 'light' ? MOON_SVG : SUN_SVG;
+            localStorage.setItem('se_theme', theme);
+        }
+        applyTheme(localStorage.getItem('se_theme') || 'dark');
+
+        document.getElementById('themeToggle').addEventListener('click', () => {
+            applyTheme(document.body.classList.contains('light') ? 'dark' : 'light');
+        });
+
+        // ========== FONT SIZE ==========
+        const fontSizeLabel = document.getElementById('fontSizeLabel');
+        let fontSize = parseInt(localStorage.getItem('se_font_size') || '13');
+
+        function applyFontSize(size) {
+            fontSize = Math.max(10, Math.min(20, size));
+            document.documentElement.style.setProperty('--base-font', fontSize + 'px');
+            document.querySelectorAll('td, thead th').forEach(el => el.style.fontSize = fontSize + 'px');
+            document.querySelectorAll('.col-list label').forEach(el => el.style.fontSize = fontSize + 'px');
+            document.querySelectorAll('#pivotOutput td, #pivotOutput th, #pivotOutput .pvtAttr, #pivotOutput select, #pivotOutput .pvtFilterBox label').forEach(el => el.style.fontSize = fontSize + 'px');
+            fontSizeLabel.textContent = fontSize;
+            localStorage.setItem('se_font_size', fontSize);
+        }
+        applyFontSize(fontSize);
+
+        document.getElementById('fontUp').addEventListener('click', () => applyFontSize(fontSize + 1));
+        document.getElementById('fontDown').addEventListener('click', () => applyFontSize(fontSize - 1));
+
         // Sidebar
         document.getElementById('toggleSidebar').addEventListener('click', () => sidebar.classList.toggle('collapsed'));
         document.getElementById('closeSidebar').addEventListener('click', () => sidebar.classList.add('collapsed'));
         document.getElementById('checkAll').addEventListener('click', () => {
             colList.querySelectorAll('input[type=checkbox]').forEach(cb => cb.checked = true);
+            saveColumnPrefs();
             if (lastRecords) renderTable();
         });
         document.getElementById('uncheckAll').addEventListener('click', () => {
             colList.querySelectorAll('input[type=checkbox]').forEach(cb => cb.checked = false);
+            saveColumnPrefs();
             if (lastRecords) renderTable();
         });
 
+        function getColumnPrefs(reportType) {
+            try {
+                const saved = localStorage.getItem('se_col_prefs_' + reportType);
+                return saved ? JSON.parse(saved) : null;
+            } catch { return null; }
+        }
+
+        function saveColumnPrefs() {
+            const rt = document.querySelector('input[name=report_type]:checked').value;
+            const prefs = {};
+            colList.querySelectorAll('input[type=checkbox]').forEach(cb => {
+                prefs[cb.value] = cb.checked;
+            });
+            localStorage.setItem('se_col_prefs_' + rt, JSON.stringify(prefs));
+        }
+
         function buildColumnCheckboxes(reportType) {
             const cols = COLUMN_MAP[reportType] || [];
+            const prefs = getColumnPrefs(reportType);
             colList.innerHTML = '';
             cols.forEach(([key, label]) => {
                 const li = document.createElement('li');
                 const lbl = document.createElement('label');
                 const cb = document.createElement('input');
-                cb.type = 'checkbox'; cb.value = key; cb.dataset.label = label; cb.checked = true;
+                cb.type = 'checkbox'; cb.value = key; cb.dataset.label = label;
+                cb.checked = prefs ? (prefs[key] !== false) : true;
                 lbl.appendChild(cb);
                 lbl.appendChild(document.createTextNode(label));
                 li.appendChild(lbl);
@@ -341,6 +594,7 @@
         }
 
         buildColumnCheckboxes('enquiry');
+        if (window.matchMedia('(max-width: 768px)').matches) sidebar.classList.add('collapsed');
 
         document.querySelectorAll('input[name=report_type]').forEach(radio => {
             radio.addEventListener('change', (e) => {
@@ -531,6 +785,7 @@
                 content.className = 'th-content';
                 content.innerHTML = `<span>${col.label}</span>${FILTER_SVG}`;
                 th.appendChild(content);
+                th.style.fontSize = fontSize + 'px';
                 th.dataset.key = col.key;
                 if (columnFilters[col.key]) th.classList.add('filtered');
                 th.addEventListener('click', (e) => {
@@ -555,6 +810,7 @@
                 selected.forEach(col => {
                     const td = document.createElement('td');
                     td.textContent = record[col.key] ?? '';
+                    td.style.fontSize = fontSize + 'px';
                     tr.appendChild(td);
                 });
                 tbody.appendChild(tr);
@@ -564,25 +820,56 @@
         }
 
         colList.addEventListener('change', () => {
+            saveColumnPrefs();
             if (lastRecords) renderTable();
         });
 
         // ========== VIEW TOGGLE ==========
         const tableView = document.getElementById('tableView');
         const dashboardView = document.getElementById('dashboardView');
+        const pivotView = document.getElementById('pivotView');
+
+        function switchView(view) {
+            tableView.style.display = view === 'table' ? 'block' : 'none';
+            dashboardView.style.display = view === 'dashboard' ? 'block' : 'none';
+            pivotView.style.display = view === 'pivot' ? 'block' : 'none';
+            if (view === 'dashboard' && lastRecords) buildDashboard();
+            if (view === 'pivot' && lastRecords) buildPivot();
+        }
 
         document.querySelectorAll('input[name=view]').forEach(radio => {
-            radio.addEventListener('change', (e) => {
-                if (e.target.value === 'dashboard') {
-                    tableView.style.display = 'none';
-                    dashboardView.style.display = 'block';
-                    if (lastRecords) buildDashboard();
-                } else {
-                    tableView.style.display = 'block';
-                    dashboardView.style.display = 'none';
-                }
-            });
+            radio.addEventListener('change', (e) => switchView(e.target.value));
         });
+
+        // ========== PIVOT ==========
+        function buildPivot() {
+            if (!lastRecords || lastRecords.length === 0) return;
+            const el = document.getElementById('pivotOutput');
+            try {
+                const rt = document.querySelector('input[name=report_type]:checked').value;
+                const cols = COLUMN_MAP[rt] || [];
+
+                const data = lastRecords.map(record => {
+                    const row = {};
+                    cols.forEach(([key, label]) => { row[label] = record[key] ?? ''; });
+                    return row;
+                });
+
+                $(el).empty();
+                $(el).pivotUI(data, {
+                    rows: [],
+                    cols: [],
+                    rendererName: "Table",
+                    renderers: $.extend(
+                        $.pivotUtilities.renderers,
+                        $.pivotUtilities.plotly_renderers
+                    ),
+                }, true);
+            } catch (e) {
+                el.textContent = 'An error occurred rendering the PivotTable UI.';
+                console.error('buildPivot error:', e);
+            }
+        }
 
         // ========== DASHBOARD ==========
         const COLORS = ['#3b82f6','#22c55e','#f59e0b','#f43f5e','#a855f7','#06b6d4','#ec4899','#84cc16','#f97316','#6366f1'];
@@ -751,40 +1038,137 @@
             }
         }
 
-        // ========== FORM SUBMIT ==========
+        // ========== EXPORT XLSX ==========
+        const exportBtn = document.getElementById('exportBtn');
+        exportBtn.addEventListener('click', () => {
+            if (!lastRecords || lastRecords.length === 0) return;
+            const selected = getSelectedColumns();
+            if (selected.length === 0) return;
+            const filtered = applyColumnFilters(lastRecords);
+            const textCols = new Set(['claim_no']);
+
+            const header = selected.map(c => c.label);
+            const rows = filtered.map(record =>
+                selected.map(col => record[col.key] ?? '')
+            );
+            const ws = XLSX.utils.aoa_to_sheet([header, ...rows]);
+
+            // Force text format for textCols
+            const textColIdx = [];
+            selected.forEach((col, i) => { if (textCols.has(col.key)) textColIdx.push(i); });
+            for (let r = 1; r <= filtered.length; r++) {
+                textColIdx.forEach(c => {
+                    const cell = ws[XLSX.utils.encode_cell({ r, c })];
+                    if (cell) { cell.t = 's'; cell.v = String(cell.v); }
+                });
+            }
+
+            // Auto column width
+            ws['!cols'] = selected.map((col, i) => {
+                let max = col.label.length;
+                filtered.forEach(record => {
+                    const len = String(record[col.key] ?? '').length;
+                    if (len > max) max = len;
+                });
+                return { wch: Math.min(max + 2, 40) };
+            });
+
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, 'Report');
+            const rt = document.querySelector('input[name=report_type]:checked').value;
+            const df = document.getElementById('date_from').value;
+            const dt = document.getElementById('date_to').value;
+            XLSX.writeFile(wb, `SE_Report_${rt}_${df}_${dt}.xlsx`);
+        });
+
+        // ========== FORM SUBMIT (SSE STREAMING) ==========
+        let abortController = null;
+        const progressContainer = document.getElementById('progressContainer');
+        const progressFill = document.getElementById('progressFill');
+        const progressText = document.getElementById('progressText');
+
+        document.getElementById('cancelBtn').addEventListener('click', () => {
+            if (abortController) abortController.abort();
+        });
+
         form.addEventListener('submit', async function (e) {
             e.preventDefault();
             status.className = '';
-            status.textContent = 'Loading...';
+            status.textContent = '';
             thead.innerHTML = ''; tbody.innerHTML = '';
             table.style.display = 'none';
             btn.disabled = true;
+            exportBtn.style.display = 'none';
             lastRecords = null;
             columnFilters = {};
 
+            progressFill.style.width = '0%';
+            progressText.textContent = 'Connecting...';
+            progressContainer.classList.add('active');
+
+            abortController = new AbortController();
             const formData = new FormData(this);
+
             try {
-                const res = await fetch('/fetch', { method: 'POST', body: formData });
-                const json = await res.json();
-                if (json.error) throw new Error(json.error);
-                const records = json.data;
-                if (!records || records.length === 0) {
-                    status.textContent = 'No data found.';
-                    return;
-                }
-                lastRecords = records;
-                renderTable();
-                const activeView = document.querySelector('input[name=view]:checked').value;
-                if (activeView === 'dashboard') {
-                    tableView.style.display = 'none';
-                    dashboardView.style.display = 'block';
-                    buildDashboard();
+                const res = await fetch('/fetch-stream', {
+                    method: 'POST',
+                    body: formData,
+                    signal: abortController.signal,
+                });
+
+                const reader = res.body.getReader();
+                const decoder = new TextDecoder();
+                let buffer = '';
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+
+                    buffer += decoder.decode(value, { stream: true });
+                    const parts = buffer.split('\n\n');
+                    buffer = parts.pop();
+
+                    for (const part of parts) {
+                        if (!part.trim()) continue;
+                        let eventType = null, dataStr = null;
+                        for (const line of part.split('\n')) {
+                            if (line.startsWith('event: ')) eventType = line.slice(7).trim();
+                            else if (line.startsWith('data: ')) dataStr = line.slice(6);
+                        }
+                        if (!eventType || !dataStr) continue;
+                        const payload = JSON.parse(dataStr);
+
+                        if (eventType === 'progress') {
+                            const pct = payload.total > 0 ? Math.round((payload.fetched / payload.total) * 100) : 0;
+                            progressFill.style.width = pct + '%';
+                            progressText.textContent = `Page ${payload.page} — ${payload.fetched.toLocaleString()}/${payload.total.toLocaleString()} records (${pct}%)`;
+                        } else if (eventType === 'error') {
+                            throw new Error(payload.error);
+                        } else if (eventType === 'done') {
+                            const records = payload.data;
+                            if (!records || records.length === 0) {
+                                status.textContent = 'No data found.';
+                            } else {
+                                lastRecords = records;
+                                renderTable();
+                                exportBtn.style.display = 'inline-block';
+                                const activeView = document.querySelector('input[name=view]:checked').value;
+                                switchView(activeView);
+                            }
+                        }
+                    }
                 }
             } catch (err) {
-                status.className = 'error';
-                status.textContent = 'Error: ' + err.message;
+                if (err.name === 'AbortError') {
+                    status.textContent = 'Fetch cancelled.';
+                } else {
+                    status.className = 'error';
+                    status.textContent = 'Error: ' + err.message;
+                }
             } finally {
                 btn.disabled = false;
+                progressContainer.classList.remove('active');
+                abortController = null;
             }
         });
     </script>
