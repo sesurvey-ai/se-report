@@ -89,11 +89,18 @@ AUTH_PASS=<basic_auth_password>  # optional
 ### 2. Run Locally
 
 ```bash
+python3 -m venv venv
+source venv/bin/activate
 pip install -r requirements.txt
 python app.py
 ```
 
 เปิดเบราว์เซอร์ไปที่ `http://localhost:5000`
+
+> บน macOS พอร์ต 5000 มักชนกับ AirPlay Receiver สามารถกำหนดพอร์ตอื่นผ่าน env var ได้:
+> ```bash
+> PORT=5050 python app.py
+> ```
 
 ### 3. Run with Docker
 
