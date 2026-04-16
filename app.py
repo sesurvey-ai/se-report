@@ -1,7 +1,10 @@
+import concurrent.futures
 import json
 import os
+import queue
+import threading
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 from functools import wraps
 
 import requests
@@ -11,6 +14,13 @@ from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
 load_dotenv()
+
+# Tuning constants for parallel chunk fetching.
+# iSurvey rate-limits concurrent connections; 8 workers failed in prior tests.
+CHUNK_DAYS = 30
+PAGE_LIMIT = 5000
+MAX_WORKERS = 4
+REQUEST_TIMEOUT = 120
 
 
 def check_basic_auth(f):
@@ -41,24 +51,34 @@ class ISurveyClient:
             status_forcelist=[502, 503, 504],
             allowed_methods=["GET", "POST"],
         )
-        adapter = HTTPAdapter(max_retries=retry)
+        adapter = HTTPAdapter(
+            max_retries=retry,
+            pool_connections=MAX_WORKERS * 2,
+            pool_maxsize=MAX_WORKERS * 2,
+        )
         self.session.mount("https://", adapter)
         self.session.mount("http://", adapter)
         self._logged_in = False
+        self._login_lock = threading.Lock()
 
     def login(self):
+        # Double-check pattern: avoid stampede when multiple worker threads
+        # hit an expired session and try to re-login simultaneously.
         if self._logged_in:
             return
-        res = self.session.post(
-            f'{BASE_URL}/login.php',
-            data={
-                'username': os.getenv('ISURVEY_USER'),
-                'password': os.getenv('ISURVEY_PASS'),
-            },
-            timeout=15,
-        )
-        res.raise_for_status()
-        self._logged_in = True
+        with self._login_lock:
+            if self._logged_in:
+                return
+            res = self.session.post(
+                f'{BASE_URL}/login.php',
+                data={
+                    'username': os.getenv('ISURVEY_USER'),
+                    'password': os.getenv('ISURVEY_PASS'),
+                },
+                timeout=15,
+            )
+            res.raise_for_status()
+            self._logged_in = True
 
     def get_report_page(self, params, timeout=60):
         """Fetch a single report page. Auto re-login once on 401/403 or invalid
@@ -93,7 +113,6 @@ class ISurveyClient:
         all_records = []
         page = 1
         start = 0
-        limit = 200
 
         while True:
             params = {
@@ -103,9 +122,9 @@ class ISurveyClient:
                 'report_type': report_type,
                 'page': page,
                 'start': start,
-                'limit': limit,
+                'limit': PAGE_LIMIT,
             }
-            body = self.get_report_page(params, timeout=30)
+            body = self.get_report_page(params, timeout=REQUEST_TIMEOUT)
 
             if isinstance(body, dict):
                 records = body.get('arr_data', body.get('data', []))
@@ -120,9 +139,71 @@ class ISurveyClient:
                 break
 
             page += 1
-            start += limit
+            start += PAGE_LIMIT
 
         return all_records, total
+
+    def fetch_chunk(
+        self, df_str, dt_str, report_type, chunk_idx,
+        stop_event, event_queue,
+    ):
+        """Fetch all pages for a single date-range chunk.
+
+        Puts progress events on `event_queue`, then either a `chunk_done`
+        (with records) or `chunk_error` (with message) event. Aborts early
+        if `stop_event` is set.
+        """
+        try:
+            records = []
+            page = 1
+            start = 0
+
+            while True:
+                if stop_event.is_set():
+                    return
+
+                params = {
+                    'con_date': 2,
+                    'date_from': df_str,
+                    'date_to': dt_str,
+                    'report_type': report_type,
+                    'page': page,
+                    'start': start,
+                    'limit': PAGE_LIMIT,
+                }
+
+                body = self.get_report_page(params, timeout=REQUEST_TIMEOUT)
+
+                if isinstance(body, dict):
+                    batch = body.get('arr_data', body.get('data', []))
+                    total = body.get('total', body.get('totalCount', 0))
+                else:
+                    batch = body
+                    total = len(body)
+
+                records.extend(batch)
+
+                event_queue.put(('progress', {
+                    'chunk_idx': chunk_idx,
+                    'chunk_fetched': len(records),
+                    'chunk_total': total,
+                }))
+
+                if not batch or len(records) >= total:
+                    break
+
+                page += 1
+                start += PAGE_LIMIT
+
+            event_queue.put(('chunk_done', {
+                'chunk_idx': chunk_idx,
+                'records': records,
+            }))
+        except Exception as e:
+            event_queue.put(('chunk_error', {
+                'chunk_idx': chunk_idx,
+                'error': str(e),
+            }))
 
 
 COLUMN_MAP = {
@@ -239,8 +320,6 @@ def fetch_stream():
     try:
         df_date = datetime.strptime(date_from, '%Y-%m-%d')
         dt_date = datetime.strptime(date_to, '%Y-%m-%d')
-        df = df_date.strftime('%d/%m/%Y')
-        dt = dt_date.strftime('%d/%m/%Y')
     except ValueError:
         def error_gen():
             yield f"event: error\ndata: {json.dumps({'error': 'รูปแบบวันที่ไม่ถูกต้อง'})}\n\n"
@@ -251,6 +330,20 @@ def fetch_stream():
             yield f"event: error\ndata: {json.dumps({'error': 'ช่วงวันที่เกิน 2 ปี กรุณาเลือกช่วงที่สั้นกว่านี้'})}\n\n"
         return Response(range_error(), mimetype='text/event-stream')
 
+    # Split the date range into chunks for parallel fetching.
+    chunks = []
+    cursor = df_date
+    idx = 0
+    while cursor <= dt_date:
+        chunk_end = min(cursor + timedelta(days=CHUNK_DAYS - 1), dt_date)
+        chunks.append((
+            idx,
+            cursor.strftime('%d/%m/%Y'),
+            chunk_end.strftime('%d/%m/%Y'),
+        ))
+        cursor = chunk_end + timedelta(days=1)
+        idx += 1
+
     def generate():
         try:
             client.login()
@@ -260,52 +353,77 @@ def fetch_stream():
             return
 
         deadline = time.monotonic() + 540
-        all_records = []
-        page = 1
-        start = 0
-        limit = 200
+        stop_event = threading.Event()
+        event_queue = queue.Queue()
+        chunk_results = {}
+        chunk_progress = {}
+        chunks_total = len(chunks)
+        chunks_done = 0
+        error_msg = None
 
-        while True:
-            if time.monotonic() > deadline:
-                yield f"event: error\ndata: {json.dumps({'error': 'Request timed out (เกิน 9 นาที) ลองเลือกช่วงวันที่สั้นลง'})}\n\n"
-                return
+        executor = concurrent.futures.ThreadPoolExecutor(
+            max_workers=min(MAX_WORKERS, chunks_total),
+            thread_name_prefix='isurvey-chunk',
+        )
 
-            params = {
-                'con_date': 2,
-                'date_from': df,
-                'date_to': dt,
-                'report_type': report_type,
-                'page': page,
-                'start': start,
-                'limit': limit,
-            }
+        try:
+            for chunk_idx, chunk_df, chunk_dt in chunks:
+                executor.submit(
+                    client.fetch_chunk,
+                    chunk_df, chunk_dt, report_type,
+                    chunk_idx, stop_event, event_queue,
+                )
 
-            try:
-                body = client.get_report_page(params, timeout=60)
-            except Exception as e:
+            while chunks_done < chunks_total:
+                if time.monotonic() > deadline:
+                    stop_event.set()
+                    error_msg = 'Request timed out (เกิน 9 นาที) ลองเลือกช่วงวันที่สั้นลง'
+                    break
+
+                try:
+                    ev_type, ev_data = event_queue.get(timeout=1.0)
+                except queue.Empty:
+                    continue
+
+                if ev_type == 'progress':
+                    chunk_progress[ev_data['chunk_idx']] = {
+                        'fetched': ev_data['chunk_fetched'],
+                        'total': ev_data['chunk_total'],
+                    }
+                    total_fetched = sum(p['fetched'] for p in chunk_progress.values())
+                    total_est = sum(p['total'] for p in chunk_progress.values())
+                    yield (
+                        f"event: progress\ndata: "
+                        f"{json.dumps({'fetched': total_fetched, 'total': total_est, 'page': chunks_done + 1})}\n\n"
+                    )
+                elif ev_type == 'chunk_done':
+                    chunk_results[ev_data['chunk_idx']] = ev_data['records']
+                    chunks_done += 1
+                elif ev_type == 'chunk_error':
+                    stop_event.set()
+                    error_msg = ev_data['error']
+                    break
+
+            if error_msg:
+                executor.shutdown(wait=False, cancel_futures=True)
                 client._logged_in = False
-                yield f"event: error\ndata: {json.dumps({'error': str(e)})}\n\n"
+                yield f"event: error\ndata: {json.dumps({'error': error_msg})}\n\n"
                 return
 
-            if isinstance(body, dict):
-                records = body.get('arr_data', body.get('data', []))
-                total = body.get('total', body.get('totalCount', 0))
-            else:
-                records = body
-                total = len(body)
+            executor.shutdown(wait=True)
 
-            all_records.extend(records)
+            all_records = []
+            for i in range(chunks_total):
+                all_records.extend(chunk_results.get(i, []))
 
-            yield f"event: progress\ndata: {json.dumps({'fetched': len(all_records), 'total': total, 'page': page})}\n\n"
-
-            if not records or len(all_records) >= total:
-                break
-
-            page += 1
-            start += limit
-
-        columns = COLUMN_MAP.get(report_type)
-        yield f"event: done\ndata: {json.dumps({'total': len(all_records), 'data': all_records, 'columns': columns})}\n\n"
+            columns = COLUMN_MAP.get(report_type)
+            yield (
+                f"event: done\ndata: "
+                f"{json.dumps({'total': len(all_records), 'data': all_records, 'columns': columns})}\n\n"
+            )
+        finally:
+            stop_event.set()
+            executor.shutdown(wait=False, cancel_futures=True)
 
     return Response(
         generate(),

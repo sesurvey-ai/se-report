@@ -169,6 +169,9 @@
         tbody tr { background: #0f172a; transition: background 0.1s; }
         tbody tr:nth-child(even) { background: #162032; }
         tbody tr:hover { background: #1e3a5f; }
+        tbody tr.virtual-spacer,
+        tbody tr.virtual-spacer:hover { background: transparent !important; }
+        tbody tr.virtual-spacer td { padding: 0 !important; border: none !important; }
 
         /* Filter dropdown */
         .filter-dropdown {
@@ -839,12 +842,88 @@
             table.style.display = 'table';
         }
 
-        function renderRows() {
-            tbody.innerHTML = '';
-            const filtered = applyColumnFilters(lastRecords);
-            const selected = currentSelected.length ? currentSelected : getSelectedColumns();
+        // ========== VIRTUAL SCROLL ==========
+        // Renders only rows inside the viewport (+ buffer) so that datasets
+        // with 100k+ rows don't blow up the DOM. Top/bottom spacer <tr>s are
+        // persistent anchors so tbody's scrollHeight never collapses during
+        // re-render (which would clamp scrollTop to 0). Filter/dashboard/
+        // pivot/export still operate on `lastRecords` directly.
+        let _virtualFiltered = [];
+        let _virtualRange = { start: -1, end: -1 };
+        let _rowHeight = 34;
+        let _rowHeightMeasured = false;
+        let _topSpacer = null;
+        let _bottomSpacer = null;
+        const VIRTUAL_BUFFER = 20;
+        const scrollContainer = document.querySelector('.content');
 
-            filtered.forEach(record => {
+        function renderRows() {
+            _virtualFiltered = applyColumnFilters(lastRecords);
+            _virtualRange = { start: -1, end: -1 };
+            _renderVisibleRows();
+            status.textContent = `Showing ${_virtualFiltered.length} of ${lastRecords.length} records`;
+        }
+
+        function _computeVisibleRange() {
+            const total = _virtualFiltered.length;
+            if (total === 0) return { start: 0, end: 0 };
+            const tableRect = table.getBoundingClientRect();
+            const containerRect = scrollContainer.getBoundingClientRect();
+            const headerH = thead.getBoundingClientRect().height || 40;
+            const offsetPastTable = Math.max(0, containerRect.top - tableRect.top);
+            const effectiveTop = Math.max(0, offsetPastTable - headerH);
+            const viewH = scrollContainer.clientHeight;
+            const start = Math.max(0, Math.floor(effectiveTop / _rowHeight) - VIRTUAL_BUFFER);
+            const visible = Math.ceil(viewH / _rowHeight) + 2 * VIRTUAL_BUFFER;
+            const end = Math.min(total, start + visible);
+            return { start, end };
+        }
+
+        function _ensureSpacers(colspan) {
+            if (_topSpacer && _topSpacer.parentNode === tbody &&
+                _bottomSpacer && _bottomSpacer.parentNode === tbody) {
+                _topSpacer.firstChild.colSpan = colspan;
+                _bottomSpacer.firstChild.colSpan = colspan;
+                return;
+            }
+            _topSpacer = document.createElement('tr');
+            _topSpacer.className = 'virtual-spacer';
+            _topSpacer.innerHTML = `<td colspan="${colspan}" style="height:0"></td>`;
+            _bottomSpacer = document.createElement('tr');
+            _bottomSpacer.className = 'virtual-spacer';
+            _bottomSpacer.innerHTML = `<td colspan="${colspan}" style="height:0"></td>`;
+            tbody.replaceChildren(_topSpacer, _bottomSpacer);
+        }
+
+        function _renderVisibleRows() {
+            const total = _virtualFiltered.length;
+            if (total === 0) {
+                tbody.replaceChildren();
+                _topSpacer = _bottomSpacer = null;
+                return;
+            }
+            const selected = currentSelected.length ? currentSelected : getSelectedColumns();
+            const { start, end } = _computeVisibleRange();
+            _virtualRange = { start, end };
+            const colspan = selected.length;
+
+            _ensureSpacers(colspan);
+
+            // Remove existing visible rows between spacers, then insert fresh
+            // ones. Spacers stay in place so tbody never collapses in height.
+            let node = _topSpacer.nextSibling;
+            while (node && node !== _bottomSpacer) {
+                const toRemove = node;
+                node = node.nextSibling;
+                toRemove.remove();
+            }
+
+            _topSpacer.firstChild.style.height = (start * _rowHeight) + 'px';
+            _bottomSpacer.firstChild.style.height = ((total - end) * _rowHeight) + 'px';
+
+            const frag = document.createDocumentFragment();
+            for (let i = start; i < end; i++) {
+                const record = _virtualFiltered[i];
                 const tr = document.createElement('tr');
                 selected.forEach(col => {
                     const td = document.createElement('td');
@@ -852,11 +931,41 @@
                     td.style.fontSize = fontSize + 'px';
                     tr.appendChild(td);
                 });
-                tbody.appendChild(tr);
-            });
+                frag.appendChild(tr);
+            }
+            tbody.insertBefore(frag, _bottomSpacer);
 
-            status.textContent = `Showing ${filtered.length} of ${lastRecords.length} records`;
+            if (!_rowHeightMeasured) {
+                const realRow = tbody.querySelector('tr:not(.virtual-spacer)');
+                if (realRow) {
+                    const h = realRow.getBoundingClientRect().height;
+                    _rowHeightMeasured = true;
+                    if (h > 10 && Math.abs(h - _rowHeight) > 1) {
+                        _rowHeight = h;
+                        _renderVisibleRows();
+                    }
+                }
+            }
         }
+
+        let _scrollRaf = null;
+        scrollContainer.addEventListener('scroll', () => {
+            if (_scrollRaf) return;
+            _scrollRaf = requestAnimationFrame(() => {
+                _scrollRaf = null;
+                if (tableView.style.display === 'none') return;
+                if (!lastRecords || lastRecords.length === 0) return;
+                const r = _computeVisibleRange();
+                if (r.start !== _virtualRange.start || r.end !== _virtualRange.end) {
+                    _renderVisibleRows();
+                }
+            });
+        });
+
+        window.addEventListener('resize', () => {
+            if (!lastRecords || lastRecords.length === 0) return;
+            if (tableView && tableView.style.display !== 'none') _renderVisibleRows();
+        });
 
         colList.addEventListener('change', () => {
             saveColumnPrefs();
