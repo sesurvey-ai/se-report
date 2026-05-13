@@ -329,7 +329,9 @@
             min-width: 240px; min-height: 220px;
             max-width: 95vw; max-height: 90vh;
         }
-        #pivotOutput .pvt-filter-close {
+        /* Higher-specificity selector so the close × is not painted blue by
+           the generic `#pivotOutput .pvtFilterBox button` rule above. */
+        #pivotOutput .pvtFilterBox button.pvt-filter-close {
             position: absolute; top: 6px; right: 8px;
             width: 24px; height: 24px; padding: 0;
             background: transparent; border: none; color: #94a3b8;
@@ -338,9 +340,13 @@
             font-size: 20px; line-height: 1; font-family: inherit;
             border-radius: 4px;
         }
-        #pivotOutput .pvt-filter-close:hover { background: #334155; color: #e2e8f0; }
-        body.light #pivotOutput .pvt-filter-close { color: #64748b; }
-        body.light #pivotOutput .pvt-filter-close:hover { background: #f1f5f9; color: #1e293b; }
+        #pivotOutput .pvtFilterBox button.pvt-filter-close:hover {
+            background: #334155; color: #e2e8f0;
+        }
+        body.light #pivotOutput .pvtFilterBox button.pvt-filter-close { color: #64748b; }
+        body.light #pivotOutput .pvtFilterBox button.pvt-filter-close:hover {
+            background: #f1f5f9; color: #1e293b;
+        }
         #pivotOutput .pvtFilterBox > * { flex: 0 0 auto; }
         #pivotOutput .pvtFilterBox h4 {
             cursor: move; user-select: none;
@@ -1456,6 +1462,9 @@
                     rendererName: savedCfg.rendererName || 'Table',
                     inclusions: filterInclusions(savedCfg.inclusions),
                     exclusions: filterInclusions(savedCfg.exclusions),
+                    // Default is 500; raise so fields with many unique values
+                    // (e.g. claim numbers ~600+) still render the checklist.
+                    menuLimit: 20000,
                     renderers: $.extend(
                         $.pivotUtilities.renderers,
                         $.pivotUtilities.plotly_renderers
