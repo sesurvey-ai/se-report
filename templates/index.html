@@ -363,17 +363,20 @@
             background: #3b82f6; color: #fff; border: none; border-radius: 6px;
             padding: 4px 12px; cursor: pointer;
         }
-        /* Breathing room between filter-box controls so Select All/None and
-           Apply/Cancel don't touch the search input or each other. */
+        /* Trim the default <h4>/<p> margins inside the filter box so the
+           header, search input, and Select All/None sit close together. */
+        #pivotOutput .pvtFilterBox h4 { margin: 0 0 6px 0; }
+        #pivotOutput .pvtFilterBox p { margin: 0; }
+        /* Small breathing room between adjacent buttons. */
         #pivotOutput .pvtFilterBox button:not(.pvt-filter-close) {
-            margin: 4px 4px;
+            margin: 2px 3px;
         }
         #pivotOutput .pvtFilterBox input[type=text] {
             background: #0f172a; color: #e2e8f0; border: 1px solid #475569; border-radius: 4px;
         }
         #pivotOutput .pvtFilterBox input.pvtSearch {
             display: block; width: 100%; box-sizing: border-box;
-            margin: 4px 0 8px 0; padding: 6px 8px;
+            margin: 0 0 4px 0; padding: 6px 8px;
         }
         #pivotOutput .pvtCheckContainer label { color: #cbd5e1; }
         #pivotOutput .pvtRendererArea { padding: 0; }
