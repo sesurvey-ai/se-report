@@ -1084,6 +1084,23 @@
             const tbl = document.querySelector('#pivotOutput table.pvtUi');
             if (!tbl) return;
 
+            // Measure intrinsic width of the aggregator (Count) cell BEFORE
+            // colgroup constrains it, so we can floor col 2 at that width.
+            // Keep a small buffer for the resizer handle (6px) and padding.
+            if (typeof tbl._minCol2 === 'undefined') {
+                const valsCell = tbl.querySelector('td.pvtVals');
+                tbl._minCol2 = valsCell
+                    ? Math.ceil(valsCell.getBoundingClientRect().width) + 8
+                    : 200;
+            }
+            // Likewise measure the renderer-selector cell (row 1 col 1) for col 1 min
+            if (typeof tbl._minCol1 === 'undefined') {
+                const rendererCell = tbl.querySelector('tr:first-child td:first-child');
+                tbl._minCol1 = rendererCell
+                    ? Math.max(140, Math.ceil(rendererCell.getBoundingClientRect().width) + 8)
+                    : 140;
+            }
+
             // Ensure colgroup with 3 cols exists (pivot has 3 columns in row 2)
             let colgroup = tbl.querySelector(':scope > colgroup');
             if (!colgroup) {
@@ -1093,10 +1110,14 @@
             }
             const colEls = colgroup.querySelectorAll('col');
 
-            // Restore saved widths (col 3 = renderer area, stays auto)
+            // Restore saved widths (col 3 = renderer area, stays auto).
+            // Clamp to measured minimums in case localStorage holds an older
+            // narrower value from before this floor was introduced.
             const saved = JSON.parse(localStorage.getItem('se_pivot_widths') || '{}');
-            colEls[0].style.width = saved.col1 || '260px';
-            colEls[1].style.width = saved.col2 || '200px';
+            const savedCol1 = parseInt(saved.col1, 10) || 260;
+            const savedCol2 = parseInt(saved.col2, 10) || 200;
+            colEls[0].style.width = Math.max(tbl._minCol1, savedCol1) + 'px';
+            colEls[1].style.width = Math.max(tbl._minCol2, savedCol2) + 'px';
 
             if (tbl._resizersAdded) return;
             tbl._resizersAdded = true;
@@ -1114,11 +1135,12 @@
                     const startX = e.clientX;
                     const startW = parseInt(colEls[colIdx].style.width, 10)
                         || cell.getBoundingClientRect().width;
+                    const minW = colIdx === 0 ? tbl._minCol1 : tbl._minCol2;
                     handle.classList.add('dragging');
                     document.body.style.cursor = 'col-resize';
                     document.body.style.userSelect = 'none';
                     const onMove = ev => {
-                        const w = Math.max(120, Math.min(800, startW + ev.clientX - startX));
+                        const w = Math.max(minW, Math.min(800, startW + ev.clientX - startX));
                         colEls[colIdx].style.width = w + 'px';
                     };
                     const onUp = () => {
