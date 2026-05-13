@@ -1390,6 +1390,7 @@
             try {
                 const rt = document.querySelector('input[name=report_type]:checked').value;
                 const cols = COLUMN_MAP[rt] || [];
+                const validLabels = new Set(cols.map(([, label]) => label));
 
                 const data = lastRecords.map(record => {
                     const row = {};
@@ -1397,15 +1398,53 @@
                     return row;
                 });
 
+                // Restore prior config saved per report type. Field selections
+                // (rows/cols/vals) are filtered against the current column set
+                // so a config from one report type doesn't break the other.
+                const storageKey = 'se_pivot_config_' + rt;
+                let savedCfg = {};
+                try { savedCfg = JSON.parse(localStorage.getItem(storageKey) || '{}'); }
+                catch (_) { savedCfg = {}; }
+                const filterLabels = arr => Array.isArray(arr)
+                    ? arr.filter(l => validLabels.has(l)) : [];
+                const filterInclusions = obj => {
+                    if (!obj || typeof obj !== 'object') return {};
+                    const out = {};
+                    Object.keys(obj).forEach(k => {
+                        if (validLabels.has(k)) out[k] = obj[k];
+                    });
+                    return out;
+                };
+
                 $(el).empty();
                 $(el).pivotUI(data, {
-                    rows: [],
-                    cols: [],
-                    rendererName: "Table",
+                    rows: filterLabels(savedCfg.rows),
+                    cols: filterLabels(savedCfg.cols),
+                    vals: filterLabels(savedCfg.vals),
+                    aggregatorName: savedCfg.aggregatorName || 'Count',
+                    rendererName: savedCfg.rendererName || 'Table',
+                    inclusions: filterInclusions(savedCfg.inclusions),
+                    exclusions: filterInclusions(savedCfg.exclusions),
                     renderers: $.extend(
                         $.pivotUtilities.renderers,
                         $.pivotUtilities.plotly_renderers
                     ),
+                    onRefresh: function (cfg) {
+                        // Strip non-serializable bits (functions, derived data
+                        // sources) before persisting.
+                        const persistable = {
+                            rows: cfg.rows || [],
+                            cols: cfg.cols || [],
+                            vals: cfg.vals || [],
+                            aggregatorName: cfg.aggregatorName,
+                            rendererName: cfg.rendererName,
+                            inclusions: cfg.inclusions || {},
+                            exclusions: cfg.exclusions || {},
+                        };
+                        try {
+                            localStorage.setItem(storageKey, JSON.stringify(persistable));
+                        } catch (_) { /* quota or private mode — ignore */ }
+                    },
                 }, true);
                 attachPivotResizers();
             } catch (e) {
