@@ -320,6 +320,19 @@
         #pivotOutput .pvtFilterBox {
             background: #1e293b; border: 1px solid #475569; border-radius: 8px;
             color: #e2e8f0; box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+            /* Resizable + flex column so the checkbox list grows with the box */
+            resize: both; overflow: hidden;
+            display: flex; flex-direction: column;
+            min-width: 240px; min-height: 260px;
+            max-width: 95vw; max-height: 90vh;
+        }
+        #pivotOutput .pvtFilterBox > * { flex: 0 0 auto; }
+        #pivotOutput .pvtFilterBox h4 {
+            cursor: move; user-select: none;
+        }
+        #pivotOutput .pvtFilterBox .pvtCheckContainer {
+            flex: 1 1 auto; min-height: 0;
+            overflow-y: auto; height: auto !important;
         }
         #pivotOutput .pvtFilterBox button {
             background: #3b82f6; color: #fff; border: none; border-radius: 6px;
@@ -1090,10 +1103,43 @@
         const _pivotObserver = new MutationObserver(() => {
             requestAnimationFrame(() => {
                 attachPivotResizers();
+                attachFilterBoxDrag();
                 updatePivotHScroll();
             });
         });
         _pivotObserver.observe(document.getElementById('pivotOutput'), { childList: true, subtree: true });
+
+        // Make the pvtFilterBox draggable by its <h4> header. The library
+        // positions the box near the clicked pill (sometimes off-screen),
+        // so giving users a drag handle lets them park it anywhere.
+        function attachFilterBoxDrag() {
+            document.querySelectorAll('#pivotOutput .pvtFilterBox').forEach(fb => {
+                if (fb._dragAttached) return;
+                const header = fb.querySelector('h4');
+                if (!header) return;
+                fb._dragAttached = true;
+                header.addEventListener('mousedown', e => {
+                    const parent = fb.offsetParent || document.body;
+                    const parentRect = parent.getBoundingClientRect();
+                    const rect = fb.getBoundingClientRect();
+                    const offX = e.clientX - rect.left;
+                    const offY = e.clientY - rect.top;
+                    const onMove = ev => {
+                        fb.style.left = (ev.clientX - offX - parentRect.left) + 'px';
+                        fb.style.top  = (ev.clientY - offY - parentRect.top)  + 'px';
+                    };
+                    const onUp = () => {
+                        document.removeEventListener('mousemove', onMove);
+                        document.removeEventListener('mouseup', onUp);
+                        document.body.style.userSelect = '';
+                    };
+                    document.body.style.userSelect = 'none';
+                    document.addEventListener('mousemove', onMove);
+                    document.addEventListener('mouseup', onUp);
+                    e.preventDefault();
+                });
+            });
+        }
 
         // Drag-to-resize for pivot UI columns (unused | rows | renderer).
         // PivotTable.js renders a <table.pvtUi> without colgroup, so widths
