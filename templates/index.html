@@ -995,6 +995,13 @@
             tableView.style.display = view === 'table' ? 'block' : 'none';
             dashboardView.style.display = view === 'dashboard' ? 'flex' : 'none';
             pivotView.style.display = view === 'pivot' ? 'block' : 'none';
+            // Auto-collapse the Columns sidebar on Pivot (redundant with
+            // pivot's own field list) and restore it on Table/Dashboard.
+            // Skip on mobile where the sidebar is overlay-managed manually.
+            if (!window.matchMedia('(max-width: 768px)').matches) {
+                if (view === 'pivot') sidebar.classList.add('collapsed');
+                else sidebar.classList.remove('collapsed');
+            }
             if (view === 'dashboard' && lastRecords) buildDashboard();
             if (view === 'pivot' && lastRecords) buildPivot();
             updatePivotHScroll();
