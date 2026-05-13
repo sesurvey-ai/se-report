@@ -1177,12 +1177,17 @@
             const left = topBar.querySelector('.pivot-top-left');
             const right = topBar.querySelector('.pivot-top-right');
 
-            const rendererCell = document.querySelector(
-                '#pivotOutput table.pvtUi > tbody > tr:first-child > td:first-child'
-            );
-            if (rendererCell && rendererCell.firstChild) {
-                left.innerHTML = '';
-                while (rendererCell.firstChild) left.appendChild(rendererCell.firstChild);
+            // Target the renderer <select> by its library-assigned class. Its
+            // parent <td> is the cell we need to empty. Using a positional
+            // selector (tr:first-child > td:first-child) was unreliable
+            // because the table doesn't always have an explicit <tbody>.
+            const rendererSelect = document.querySelector('#pivotOutput .pvtRenderer');
+            if (rendererSelect && !left.contains(rendererSelect)) {
+                const cell = rendererSelect.parentElement;
+                if (cell && cell.tagName === 'TD') {
+                    left.innerHTML = '';
+                    while (cell.firstChild) left.appendChild(cell.firstChild);
+                }
             }
 
             const total = (typeof lastRecords !== 'undefined' && lastRecords)
