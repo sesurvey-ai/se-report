@@ -362,6 +362,28 @@
         body.light #pivotOutput .pvt-resizer:hover,
         body.light #pivotOutput .pvt-resizer.dragging { background: #2563eb; }
 
+        /* Collapse toggle on the Unused column */
+        #pivotOutput .pvt-collapse-btn {
+            position: absolute; top: 4px; right: 6px;
+            width: 22px; height: 22px; padding: 0;
+            background: transparent; border: 1px solid #475569; color: #94a3b8;
+            border-radius: 4px; cursor: pointer; z-index: 11;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 14px; line-height: 1; font-family: inherit;
+        }
+        #pivotOutput .pvt-collapse-btn:hover { background: #334155; color: #e2e8f0; }
+        body.light #pivotOutput .pvt-collapse-btn { border-color: #cbd5e1; color: #64748b; }
+        body.light #pivotOutput .pvt-collapse-btn:hover { background: #f1f5f9; color: #1e293b; }
+
+        #pivotOutput td.pvtUnused.pvt-unused-collapsed {
+            padding: 4px; overflow: hidden;
+        }
+        #pivotOutput td.pvtUnused.pvt-unused-collapsed > li { display: none; }
+        #pivotOutput td.pvtUnused.pvt-unused-collapsed .pvt-resizer { display: none; }
+        #pivotOutput td.pvtUnused.pvt-unused-collapsed .pvt-collapse-btn {
+            top: 50%; right: 50%; transform: translate(50%, -50%);
+        }
+
         /* Floating sticky horizontal scrollbar for pivot */
         #pivotHScroll {
             position: fixed;
@@ -1214,14 +1236,48 @@
             const saved = JSON.parse(localStorage.getItem('se_pivot_widths') || '{}');
             const savedCol1 = parseInt(saved.col1, 10) || 260;
             const savedCol2 = parseInt(saved.col2, 10) || 200;
-            colEls[0].style.width = Math.max(tbl._minCol1, savedCol1) + 'px';
+            const unusedCell = tbl.querySelector('td.pvtUnused');
+            const rowsCell = tbl.querySelector('td.pvtRows');
+
+            // Apply persisted collapse state on the Unused column. Collapsed
+            // width is fixed at 28px regardless of measured min, so the user
+            // can free up horizontal space for the renderer area.
+            const collapsedPref = localStorage.getItem('se_pivot_unused_collapsed') === 'true';
+            if (unusedCell) unusedCell.classList.toggle('pvt-unused-collapsed', collapsedPref);
+            colEls[0].style.width = collapsedPref
+                ? '28px'
+                : Math.max(tbl._minCol1, savedCol1) + 'px';
             colEls[1].style.width = Math.max(tbl._minCol2, savedCol2) + 'px';
 
             if (tbl._resizersAdded) return;
             tbl._resizersAdded = true;
 
-            const unusedCell = tbl.querySelector('td.pvtUnused');
-            const rowsCell = tbl.querySelector('td.pvtRows');
+            // Insert a collapse / expand toggle in the top-right of pvtUnused.
+            // Clicking it persists the state to localStorage and re-applies
+            // col 1 width without touching the saved drag-resize value.
+            if (unusedCell && !unusedCell.querySelector(':scope > .pvt-collapse-btn')) {
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'pvt-collapse-btn';
+                btn.title = 'ซ่อน/แสดงรายการ field';
+                btn.textContent = collapsedPref ? '»' : '«';
+                unusedCell.appendChild(btn);
+                btn.addEventListener('click', ev => {
+                    ev.stopPropagation();
+                    const nowCollapsed = !unusedCell.classList.contains('pvt-unused-collapsed');
+                    localStorage.setItem('se_pivot_unused_collapsed', String(nowCollapsed));
+                    unusedCell.classList.toggle('pvt-unused-collapsed', nowCollapsed);
+                    btn.textContent = nowCollapsed ? '»' : '«';
+                    if (nowCollapsed) {
+                        colEls[0].style.width = '28px';
+                    } else {
+                        const s = JSON.parse(localStorage.getItem('se_pivot_widths') || '{}');
+                        const w = Math.max(tbl._minCol1, parseInt(s.col1, 10) || 260);
+                        colEls[0].style.width = w + 'px';
+                    }
+                    updatePivotHScroll();
+                });
+            }
 
             function makeHandle(cell, colIdx) {
                 if (!cell) return;
