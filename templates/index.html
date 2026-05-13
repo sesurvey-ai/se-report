@@ -362,6 +362,25 @@
         body.light #pivotOutput .pvt-resizer:hover,
         body.light #pivotOutput .pvt-resizer.dragging { background: #2563eb; }
 
+        /* Custom top bar above the pivot UI: relocates the renderer (Table)
+           selector to the left and shows the record count on the right,
+           keeping them on a single row above the pvtUi grid. */
+        #pivotView .pivot-top-bar {
+            display: flex; align-items: center; gap: 12px;
+            padding: 0 0 12px 0; flex-wrap: wrap;
+        }
+        #pivotView .pivot-top-left { flex: 0 0 auto; }
+        #pivotView .pivot-top-right {
+            flex: 1 1 auto; text-align: right;
+            color: #94a3b8; font-size: 13px;
+        }
+        body.light #pivotView .pivot-top-right { color: #64748b; }
+        /* The original renderer cell is left visually empty once we move its
+           contents to the top bar — keep it from re-acquiring height. */
+        #pivotView table.pvtUi > tbody > tr:first-child > td:first-child:empty {
+            padding: 0; border: 0; height: 0;
+        }
+
         /* Collapse toggle on the Unused column */
         #pivotOutput .pvt-collapse-btn {
             position: absolute; top: 4px; right: 6px;
@@ -1046,6 +1065,9 @@
             tableView.style.display = view === 'table' ? 'block' : 'none';
             dashboardView.style.display = view === 'dashboard' ? 'flex' : 'none';
             pivotView.style.display = view === 'pivot' ? 'block' : 'none';
+            // The Pivot top bar mirrors the record count, so hide the global
+            // status text there to avoid two copies.
+            document.getElementById('status').style.display = view === 'pivot' ? 'none' : '';
             // Auto-collapse the Columns sidebar on Pivot (redundant with
             // pivot's own field list) and restore it on Table/Dashboard.
             // Skip on mobile where the sidebar is overlay-managed manually.
@@ -1130,10 +1152,43 @@
             requestAnimationFrame(() => {
                 attachPivotResizers();
                 attachFilterBoxDrag();
+                attachPivotTopBar();
                 updatePivotHScroll();
             });
         });
         _pivotObserver.observe(document.getElementById('pivotOutput'), { childList: true, subtree: true });
+
+        // Lift the renderer ("Table") selector out of pvtUi's first cell up to
+        // a custom top bar, with the record count on the right. PivotTable.js
+        // rebuilds the whole table when the user changes the renderer, so we
+        // move the new <select> on every observer fire.
+        function attachPivotTopBar() {
+            const pivotView = document.getElementById('pivotView');
+            if (!pivotView) return;
+            let topBar = pivotView.querySelector(':scope > .pivot-top-bar');
+            if (!topBar) {
+                topBar = document.createElement('div');
+                topBar.className = 'pivot-top-bar';
+                topBar.innerHTML =
+                    '<div class="pivot-top-left"></div>' +
+                    '<div class="pivot-top-right"></div>';
+                pivotView.insertBefore(topBar, pivotView.firstChild);
+            }
+            const left = topBar.querySelector('.pivot-top-left');
+            const right = topBar.querySelector('.pivot-top-right');
+
+            const rendererCell = document.querySelector(
+                '#pivotOutput table.pvtUi > tbody > tr:first-child > td:first-child'
+            );
+            if (rendererCell && rendererCell.firstChild) {
+                left.innerHTML = '';
+                while (rendererCell.firstChild) left.appendChild(rendererCell.firstChild);
+            }
+
+            const total = (typeof lastRecords !== 'undefined' && lastRecords)
+                ? lastRecords.length : 0;
+            right.textContent = total ? `Showing ${total} of ${total} records` : '';
+        }
 
         // Reposition the filter dropdown directly below the clicked triangle.
         // PivotTable.js's default positioning sometimes lands far from the
