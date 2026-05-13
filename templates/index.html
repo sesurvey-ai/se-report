@@ -282,9 +282,23 @@
         #pivotOutput .pvtAxisContainer, #pivotOutput .pvtVals {
             background: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 8px;
         }
+        /* Wrap field pills across multiple rows in the Unused/Rows columns so
+           a wider column shows more pills per row and the user doesn't have
+           to scroll vertically to find a field. Cols dropzone (horizontal)
+           already wraps via its own layout. */
+        #pivotOutput td.pvtUnused.pvtAxisContainer,
+        #pivotOutput td.pvtRows.pvtAxisContainer {
+            display: flex; flex-wrap: wrap; align-content: flex-start;
+            gap: 4px; vertical-align: top;
+        }
+        #pivotOutput td.pvtUnused.pvtAxisContainer li,
+        #pivotOutput td.pvtRows.pvtAxisContainer li {
+            margin: 0; list-style: none;
+        }
         #pivotOutput .pvtAxisContainer li span.pvtAttr {
             background: #334155; border: 1px solid #475569; color: #e2e8f0; border-radius: 6px;
             padding: 4px 10px; font-size: 12px;
+            white-space: nowrap; display: inline-block;
         }
         #pivotOutput .pvtAxisContainer li span.pvtAttr:hover { background: #3b82f6; border-color: #3b82f6; }
         #pivotOutput table.pvtTable {
