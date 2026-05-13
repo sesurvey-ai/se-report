@@ -273,6 +273,9 @@
         .chart-card .chart-wrap { position: relative; flex: 1; min-height: 0; }
         /* Pivot dark theme */
         #pivotView { overflow: auto; }
+        /* Establish a positioning context so filter dropdowns reparented to
+           #pivotOutput resolve their absolute top/left against this box. */
+        #pivotOutput { position: relative; }
         #pivotOutput .pvtUi { color: #e2e8f0; background: transparent; border: none; }
         #pivotOutput .pvtUi td, #pivotOutput .pvtUi th { background: transparent; }
         #pivotOutput select, #pivotOutput .pvtSearch input {
@@ -1341,15 +1344,22 @@
         // Reposition the filter dropdown directly below the clicked triangle.
         // PivotTable.js's default positioning sometimes lands far from the
         // pill (especially when pills are in a flex-wrapped unused list).
+        // Also reparent it to #pivotOutput so collapsing the Unused column
+        // (which hides its <li> children) doesn't take the dropdown down
+        // with it.
         document.getElementById('pivotOutput').addEventListener('click', e => {
             const tri = e.target.closest('.pvtTriangle');
             if (!tri) return;
             requestAnimationFrame(() => {
                 let fb = null;
-                document.querySelectorAll('#pivotOutput .pvtFilterBox').forEach(box => {
+                document.querySelectorAll('.pvtFilterBox').forEach(box => {
                     if (getComputedStyle(box).display !== 'none') fb = box;
                 });
                 if (!fb) return;
+                const pivotOutput = document.getElementById('pivotOutput');
+                if (fb.parentElement !== pivotOutput) {
+                    pivotOutput.appendChild(fb);
+                }
                 const triRect = tri.getBoundingClientRect();
                 const parent = fb.offsetParent || document.body;
                 const parentRect = parent.getBoundingClientRect();
