@@ -69,15 +69,25 @@ class ISurveyClient:
         with self._login_lock:
             if self._logged_in:
                 return
+            user = os.getenv('ISURVEY_USER')
+            password = os.getenv('ISURVEY_PASS')
+            if not user or not password:
+                raise RuntimeError(
+                    'ISURVEY_USER / ISURVEY_PASS ไม่ได้ตั้งค่าใน .env'
+                )
             res = self.session.post(
                 f'{BASE_URL}/login.php',
-                data={
-                    'username': os.getenv('ISURVEY_USER'),
-                    'password': os.getenv('ISURVEY_PASS'),
-                },
+                data={'username': user, 'password': password},
                 timeout=15,
             )
             res.raise_for_status()
+            # iSurvey returns 200 even on bad credentials — verify by looking
+            # for the login form in the response body.
+            body_lower = res.text.lower()
+            if '<form' in body_lower and 'password' in body_lower:
+                raise RuntimeError(
+                    'iSurvey login ล้มเหลว — ตรวจสอบ ISURVEY_USER / ISURVEY_PASS'
+                )
             self._logged_in = True
 
     def get_report_page(self, params, timeout=60):
@@ -93,7 +103,16 @@ class ISurveyClient:
                 timeout=timeout,
             )
             res.raise_for_status()
-            return res.json()
+            try:
+                return res.json()
+            except ValueError as e:
+                snippet = res.text[:200].replace('\n', ' ').strip()
+                raise ValueError(
+                    f'iSurvey ตอบกลับไม่ใช่ JSON '
+                    f'(status={res.status_code}, '
+                    f'content-type={res.headers.get("Content-Type", "?")}): '
+                    f'{snippet}'
+                ) from e
 
         try:
             return _do_request()
