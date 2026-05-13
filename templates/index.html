@@ -319,6 +319,20 @@
         #pivotOutput .pvtCheckContainer label { color: #cbd5e1; }
         #pivotOutput .pvtRendererArea { padding: 0; }
 
+        /* Resizable columns: handles live on the right edge of unused + rows cells */
+        #pivotOutput table.pvtUi { table-layout: fixed; width: 100%; }
+        #pivotOutput td.pvtUnused,
+        #pivotOutput td.pvtRows { position: relative; }
+        #pivotOutput .pvt-resizer {
+            position: absolute; top: 0; bottom: 0; right: -3px; width: 6px;
+            cursor: col-resize; z-index: 10; background: transparent;
+            transition: background 0.15s;
+        }
+        #pivotOutput .pvt-resizer:hover,
+        #pivotOutput .pvt-resizer.dragging { background: #3b82f6; }
+        body.light #pivotOutput .pvt-resizer:hover,
+        body.light #pivotOutput .pvt-resizer.dragging { background: #2563eb; }
+
         /* Floating sticky horizontal scrollbar for pivot */
         #pivotHScroll {
             position: fixed;
@@ -1055,9 +1069,79 @@
         }
         // Re-measure after pivot DOM mutations (drag, expand, render)
         const _pivotObserver = new MutationObserver(() => {
-            requestAnimationFrame(updatePivotHScroll);
+            requestAnimationFrame(() => {
+                attachPivotResizers();
+                updatePivotHScroll();
+            });
         });
         _pivotObserver.observe(document.getElementById('pivotOutput'), { childList: true, subtree: true });
+
+        // Drag-to-resize for pivot UI columns (unused | rows | renderer).
+        // PivotTable.js renders a <table.pvtUi> without colgroup, so widths
+        // don't propagate across rows. We inject a colgroup and let CSS
+        // table-layout:fixed honor the col widths. Saved in localStorage.
+        function attachPivotResizers() {
+            const tbl = document.querySelector('#pivotOutput table.pvtUi');
+            if (!tbl) return;
+
+            // Ensure colgroup with 3 cols exists (pivot has 3 columns in row 2)
+            let colgroup = tbl.querySelector(':scope > colgroup');
+            if (!colgroup) {
+                colgroup = document.createElement('colgroup');
+                for (let i = 0; i < 3; i++) colgroup.appendChild(document.createElement('col'));
+                tbl.insertBefore(colgroup, tbl.firstChild);
+            }
+            const colEls = colgroup.querySelectorAll('col');
+
+            // Restore saved widths (col 3 = renderer area, stays auto)
+            const saved = JSON.parse(localStorage.getItem('se_pivot_widths') || '{}');
+            colEls[0].style.width = saved.col1 || '260px';
+            colEls[1].style.width = saved.col2 || '200px';
+
+            if (tbl._resizersAdded) return;
+            tbl._resizersAdded = true;
+
+            const unusedCell = tbl.querySelector('td.pvtUnused');
+            const rowsCell = tbl.querySelector('td.pvtRows');
+
+            function makeHandle(cell, colIdx) {
+                if (!cell) return;
+                if (cell.querySelector(':scope > .pvt-resizer')) return;
+                const handle = document.createElement('div');
+                handle.className = 'pvt-resizer';
+                cell.appendChild(handle);
+                handle.addEventListener('mousedown', e => {
+                    const startX = e.clientX;
+                    const startW = parseInt(colEls[colIdx].style.width, 10)
+                        || cell.getBoundingClientRect().width;
+                    handle.classList.add('dragging');
+                    document.body.style.cursor = 'col-resize';
+                    document.body.style.userSelect = 'none';
+                    const onMove = ev => {
+                        const w = Math.max(120, Math.min(800, startW + ev.clientX - startX));
+                        colEls[colIdx].style.width = w + 'px';
+                    };
+                    const onUp = () => {
+                        document.removeEventListener('mousemove', onMove);
+                        document.removeEventListener('mouseup', onUp);
+                        handle.classList.remove('dragging');
+                        document.body.style.cursor = '';
+                        document.body.style.userSelect = '';
+                        localStorage.setItem('se_pivot_widths', JSON.stringify({
+                            col1: colEls[0].style.width,
+                            col2: colEls[1].style.width,
+                        }));
+                        updatePivotHScroll();
+                    };
+                    document.addEventListener('mousemove', onMove);
+                    document.addEventListener('mouseup', onUp);
+                    e.preventDefault();
+                });
+            }
+
+            makeHandle(unusedCell, 0);
+            makeHandle(rowsCell, 1);
+        }
 
         document.querySelectorAll('input[name=view]').forEach(radio => {
             radio.addEventListener('change', (e) => switchView(e.target.value));
@@ -1087,6 +1171,7 @@
                         $.pivotUtilities.plotly_renderers
                     ),
                 }, true);
+                attachPivotResizers();
             } catch (e) {
                 el.textContent = 'An error occurred rendering the PivotTable UI.';
                 console.error('buildPivot error:', e);
