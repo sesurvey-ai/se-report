@@ -1376,8 +1376,9 @@
 
                 // Tag library buttons by their label so CSS can paint them
                 // by role (primary / secondary / ghost) instead of all blue.
-                const findBtn = label => Array.from(fb.children).find(el =>
-                    el.tagName === 'BUTTON' &&
+                // PivotTable.js wraps Select All/None and Apply/Cancel in
+                // <p> tags, so use querySelectorAll to reach the buttons.
+                const findBtn = label => Array.from(fb.querySelectorAll('button')).find(el =>
                     (el.textContent || '').trim().toLowerCase() === label
                 );
                 const selectAll  = findBtn('select all');
@@ -1389,25 +1390,35 @@
                 if (applyBtn)   applyBtn.classList.add('pvt-btn-primary');
                 if (cancelBtn)  cancelBtn.classList.add('pvt-btn-secondary');
 
-                // Wrap Select All / Select None into a right-aligned actions row
-                if (selectAll && selectNone &&
-                    !fb.querySelector(':scope > .pvt-filter-actions')) {
-                    const actions = document.createElement('div');
-                    actions.className = 'pvt-filter-actions';
-                    fb.insertBefore(actions, selectAll);
-                    actions.appendChild(selectAll);
-                    actions.appendChild(selectNone);
+                // Reparent the buttons into our own containers so we can
+                // control layout (right-aligned actions row + footer band).
+                // The original ancestor that lives directly under fb (often
+                // a <p>) is removed afterwards if it's left empty.
+                function regroup(buttons, containerClass, atEnd) {
+                    const valid = buttons.filter(Boolean);
+                    if (!valid.length) return;
+                    if (fb.querySelector(':scope > .' + containerClass)) return;
+                    let anchor = valid[0];
+                    while (anchor.parentElement && anchor.parentElement !== fb) {
+                        anchor = anchor.parentElement;
+                    }
+                    const container = document.createElement('div');
+                    container.className = containerClass;
+                    if (atEnd) fb.appendChild(container);
+                    else fb.insertBefore(container, anchor);
+                    valid.forEach(b => container.appendChild(b));
+                    // Drop any now-empty <p>/<br> remnants left as direct children
+                    Array.from(fb.children).forEach(child => {
+                        if (child === container) return;
+                        if ((child.tagName === 'P' && !child.children.length &&
+                             !child.textContent.trim()) ||
+                            child.tagName === 'BR') {
+                            child.remove();
+                        }
+                    });
                 }
-
-                // Wrap Apply / Cancel into a footer (Apply primary on right)
-                if (applyBtn && cancelBtn &&
-                    !fb.querySelector(':scope > .pvt-filter-footer')) {
-                    const footer = document.createElement('div');
-                    footer.className = 'pvt-filter-footer';
-                    fb.appendChild(footer);
-                    footer.appendChild(cancelBtn);
-                    footer.appendChild(applyBtn);
-                }
+                regroup([selectAll, selectNone], 'pvt-filter-actions', false);
+                regroup([cancelBtn, applyBtn], 'pvt-filter-footer', true);
 
                 // Close button at top-right — sibling of h4 so its click
                 // doesn't bubble into the drag handler.
