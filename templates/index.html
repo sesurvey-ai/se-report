@@ -332,7 +332,11 @@
         }
         #pivotOutput .pvtFilterBox .pvtCheckContainer {
             flex: 1 1 auto; min-height: 0;
-            overflow-y: auto; height: auto !important;
+            overflow-y: auto;
+            /* Override pivot.min.css's max-height: 200px which would
+               otherwise cap the list and leave empty space when the box
+               is resized taller. */
+            height: auto !important; max-height: none !important;
         }
         #pivotOutput .pvtFilterBox button {
             background: #3b82f6; color: #fff; border: none; border-radius: 6px;
@@ -1108,6 +1112,32 @@
             });
         });
         _pivotObserver.observe(document.getElementById('pivotOutput'), { childList: true, subtree: true });
+
+        // Reposition the filter dropdown directly below the clicked triangle.
+        // PivotTable.js's default positioning sometimes lands far from the
+        // pill (especially when pills are in a flex-wrapped unused list).
+        document.getElementById('pivotOutput').addEventListener('click', e => {
+            const tri = e.target.closest('.pvtTriangle');
+            if (!tri) return;
+            requestAnimationFrame(() => {
+                let fb = null;
+                document.querySelectorAll('#pivotOutput .pvtFilterBox').forEach(box => {
+                    if (getComputedStyle(box).display !== 'none') fb = box;
+                });
+                if (!fb) return;
+                const triRect = tri.getBoundingClientRect();
+                const parent = fb.offsetParent || document.body;
+                const parentRect = parent.getBoundingClientRect();
+                let left = triRect.left - parentRect.left;
+                let top  = triRect.bottom - parentRect.top + 4;
+                // Keep within viewport bounds
+                const maxLeft = window.innerWidth - fb.offsetWidth - 8;
+                if (left > maxLeft) left = Math.max(0, maxLeft);
+                if (left < 0) left = 0;
+                fb.style.left = left + 'px';
+                fb.style.top  = top + 'px';
+            });
+        });
 
         // Make the pvtFilterBox draggable by its <h4> header. The library
         // positions the box near the clicked pill (sometimes off-screen),
