@@ -312,6 +312,22 @@
             white-space: normal; word-break: break-word; max-width: 140px;
             line-height: 1.25; vertical-align: middle;
         }
+        /* Click-to-sort affordance on axis label headers */
+        #pivotOutput table.pvtTable thead th.pvtAxisLabel {
+            cursor: pointer; user-select: none;
+            transition: background 0.12s;
+        }
+        #pivotOutput table.pvtTable thead th.pvtAxisLabel:hover {
+            background: #475569; color: #f1f5f9;
+        }
+        body.light #pivotOutput table.pvtTable thead th.pvtAxisLabel:hover {
+            background: #e2e8f0; color: #0f172a;
+        }
+        #pivotOutput .pvt-sort-indicator {
+            display: inline-block; margin-left: 4px;
+            font-size: 10px; opacity: 0.8; color: #60a5fa;
+        }
+        body.light #pivotOutput .pvt-sort-indicator { color: #2563eb; }
         #pivotOutput table.pvtTable tbody td {
             background: #0f172a; color: #cbd5e1; border: 1px solid #1e293b; padding: 6px 10px;
         }
@@ -1299,10 +1315,52 @@
                 attachPivotResizers();
                 attachFilterBoxDrag();
                 attachPivotTopBar();
+                attachSortHandlers();
                 updatePivotHScroll();
             });
         });
         _pivotObserver.observe(document.getElementById('pivotOutput'), { childList: true, subtree: true });
+
+        // Click any row/col axis label in the rendered pivot table to cycle
+        // through sort directions: default → ascending → descending → default.
+        // State is persisted per report type; clicking triggers a full pivot
+        // rebuild via buildPivot() which picks up the new rowOrder/colOrder.
+        function attachSortHandlers() {
+            const table = document.querySelector('#pivotOutput table.pvtTable');
+            if (!table || table._sortAttached) return;
+            const thead = table.querySelector('thead');
+            if (!thead) return;
+            const rtEl = document.querySelector('input[name=report_type]:checked');
+            if (!rtEl) return;
+            table._sortAttached = true;
+
+            const sortKey = 'se_pivot_sort_' + rtEl.value;
+            let state = {};
+            try { state = JSON.parse(localStorage.getItem(sortKey) || '{}'); }
+            catch (_) { state = {}; }
+
+            // Row axis labels live in the last row of <thead>; col axis labels
+            // live in earlier rows.
+            const lastRow = thead.querySelector('tr:last-child');
+
+            thead.querySelectorAll('th.pvtAxisLabel').forEach(th => {
+                const isRow = th.parentElement === lastRow;
+                const dir = isRow ? state.rows : state.cols;
+                if (dir) {
+                    const ind = document.createElement('span');
+                    ind.className = 'pvt-sort-indicator';
+                    ind.textContent = dir === 'desc' ? '▼' : '▲';
+                    th.appendChild(ind);
+                }
+                th.addEventListener('click', () => {
+                    const cur = isRow ? state.rows : state.cols;
+                    const next = !cur ? 'asc' : (cur === 'asc' ? 'desc' : null);
+                    if (isRow) state.rows = next; else state.cols = next;
+                    localStorage.setItem(sortKey, JSON.stringify(state));
+                    buildPivot();
+                });
+            });
+        }
 
         // Lift the renderer ("Table") selector out of pvtUi's first cell up to
         // a custom top bar, with the record count on the right. PivotTable.js
@@ -1632,6 +1690,15 @@
                 };
 
                 $(el).empty();
+                // Header-click sort state, persisted per report type.
+                // Values: undefined (pivot default) | 'asc' | 'desc'
+                const sortKey = 'se_pivot_sort_' + rt;
+                let sortState = {};
+                try { sortState = JSON.parse(localStorage.getItem(sortKey) || '{}'); }
+                catch (_) { sortState = {}; }
+                const rowOrderCfg = sortState.rows === 'desc' ? 'key_z_to_a' : 'key_a_to_z';
+                const colOrderCfg = sortState.cols === 'desc' ? 'key_z_to_a' : 'key_a_to_z';
+
                 $(el).pivotUI(data, {
                     rows: filterLabels(savedCfg.rows),
                     cols: filterLabels(savedCfg.cols),
@@ -1643,6 +1710,11 @@
                     // Default is 500; raise so fields with many unique values
                     // (e.g. claim numbers ~600+) still render the checklist.
                     menuLimit: 20000,
+                    // Natural sort so numeric-looking strings (claim no.) order
+                    // correctly instead of lexicographically.
+                    sorters: function (attr) { return $.pivotUtilities.naturalSort; },
+                    rowOrder: rowOrderCfg,
+                    colOrder: colOrderCfg,
                     renderers: $.extend(
                         $.pivotUtilities.renderers,
                         $.pivotUtilities.plotly_renderers
