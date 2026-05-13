@@ -1696,12 +1696,21 @@
                 let sortState = {};
                 try { sortState = JSON.parse(localStorage.getItem(sortKey) || '{}'); }
                 catch (_) { sortState = {}; }
-                const rowOrderCfg = sortState.rows === 'desc' ? 'key_z_to_a' : 'key_a_to_z';
-                const colOrderCfg = sortState.cols === 'desc' ? 'key_z_to_a' : 'key_a_to_z';
+                // PivotTable.js only ships 'key_a_to_z' / 'value_a_to_z' /
+                // 'value_z_to_a' — there is no 'key_z_to_a'. To get reverse-
+                // alphabetic order, keep rowOrder/colOrder at the ascending
+                // key value and supply a reversed comparator for the row or
+                // column attributes via the sorters callback.
+                const rowFields = filterLabels(savedCfg.rows);
+                const colFields = filterLabels(savedCfg.cols);
+                const rowSet = new Set(rowFields);
+                const colSet = new Set(colFields);
+                const reverseRow = sortState.rows === 'desc';
+                const reverseCol = sortState.cols === 'desc';
 
                 $(el).pivotUI(data, {
-                    rows: filterLabels(savedCfg.rows),
-                    cols: filterLabels(savedCfg.cols),
+                    rows: rowFields,
+                    cols: colFields,
                     vals: filterLabels(savedCfg.vals),
                     aggregatorName: savedCfg.aggregatorName || 'Count',
                     rendererName: savedCfg.rendererName || 'Table',
@@ -1711,10 +1720,18 @@
                     // (e.g. claim numbers ~600+) still render the checklist.
                     menuLimit: 20000,
                     // Natural sort so numeric-looking strings (claim no.) order
-                    // correctly instead of lexicographically.
-                    sorters: function (attr) { return $.pivotUtilities.naturalSort; },
-                    rowOrder: rowOrderCfg,
-                    colOrder: colOrderCfg,
+                    // correctly instead of lexicographically. Reverse it for
+                    // row/col attributes when their sort state is 'desc'.
+                    sorters: function (attr) {
+                        const ns = $.pivotUtilities.naturalSort;
+                        const reverse = (reverseRow && rowSet.has(attr)) ||
+                                        (reverseCol && colSet.has(attr));
+                        return reverse
+                            ? function (a, b) { return ns(b, a); }
+                            : ns;
+                    },
+                    rowOrder: 'key_a_to_z',
+                    colOrder: 'key_a_to_z',
                     renderers: $.extend(
                         $.pivotUtilities.renderers,
                         $.pivotUtilities.plotly_renderers
