@@ -1084,21 +1084,24 @@
             const tbl = document.querySelector('#pivotOutput table.pvtUi');
             if (!tbl) return;
 
-            // Measure intrinsic width of the aggregator (Count) cell BEFORE
-            // colgroup constrains it, so we can floor col 2 at that width.
-            // Keep a small buffer for the resizer handle (6px) and padding.
-            if (typeof tbl._minCol2 === 'undefined') {
-                const valsCell = tbl.querySelector('td.pvtVals');
-                tbl._minCol2 = valsCell
-                    ? Math.ceil(valsCell.getBoundingClientRect().width) + 8
-                    : 200;
+            // Measure intrinsic CONTENT width of the row-1 cells (renderer
+            // selector for col 1, aggregator for col 2). We sum the cell's
+            // children rather than using getBoundingClientRect on the cell
+            // itself, because the cell width reflects auto-layout's share of
+            // the table — not the actual width of "Table" / "Count + arrows".
+            function intrinsicWidth(cell) {
+                if (!cell) return 0;
+                let w = 0;
+                for (const c of cell.children) w += c.getBoundingClientRect().width;
+                const cs = getComputedStyle(cell);
+                w += parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight);
+                return Math.ceil(w) + 10; // small buffer for the resizer
             }
-            // Likewise measure the renderer-selector cell (row 1 col 1) for col 1 min
             if (typeof tbl._minCol1 === 'undefined') {
-                const rendererCell = tbl.querySelector('tr:first-child td:first-child');
-                tbl._minCol1 = rendererCell
-                    ? Math.max(140, Math.ceil(rendererCell.getBoundingClientRect().width) + 8)
-                    : 140;
+                tbl._minCol1 = intrinsicWidth(tbl.querySelector('tr:first-child td:first-child')) || 140;
+            }
+            if (typeof tbl._minCol2 === 'undefined') {
+                tbl._minCol2 = intrinsicWidth(tbl.querySelector('td.pvtVals')) || 200;
             }
 
             // Ensure colgroup with 3 cols exists (pivot has 3 columns in row 2)
