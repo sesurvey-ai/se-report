@@ -335,7 +335,12 @@
             flex: 1; min-height: 0;
             flex-direction: column;
         }
-        .dash-cards {
+        /* Summary cards row — hidden in the current dashboard layout
+           which dedicates the whole view to one big treemap. Kept in
+           the DOM so a future revert to the 2x3 grid doesn't have to
+           reintroduce the markup. */
+        .dash-cards { display: none; }
+        .dash-cards.dash-cards-visible {
             display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
             gap: 8px; margin-bottom: 8px;
             flex-shrink: 0;
@@ -362,9 +367,11 @@
         .dash-card .card-value { font-size: 22px; font-weight: 800; color: #f1f5f9; line-height: 1.1; }
         .dash-card .card-label { font-size: 11px; color: #64748b; margin-top: 2px; }
 
+        /* Chart area — flex column so the single treemap card stretches
+           to fill the remaining viewport height. (Previously a 2x3 grid
+           for six small charts.) */
         .dash-charts {
-            display: grid; grid-template-columns: 1fr 1fr;
-            grid-template-rows: repeat(3, 1fr);
+            display: flex; flex-direction: column;
             gap: 8px;
             flex: 1; min-height: 0;
         }
@@ -372,7 +379,7 @@
             background: #1e293b; border: 1px solid #334155; border-radius: 10px;
             padding: 8px 12px 4px;
             display: flex; flex-direction: column;
-            min-height: 0;
+            flex: 1; min-height: 0;
         }
         .chart-card h4 {
             font-size: 11px; color: #94a3b8; margin-bottom: 4px; font-weight: 600;
@@ -2045,10 +2052,21 @@
                         tree,
                         key: 'value',
                         labels: {
+                            // Multi-line labels: name on top, count below.
+                            // The treemap plugin auto-clips when a cell is
+                            // too small, so tiny long-tail cells stay readable.
                             display: true,
                             color: '#fff',
-                            font: { size: 10 },
-                            formatter: (c) => c.raw._data.label,
+                            align: 'center',
+                            position: 'middle',
+                            font: [
+                                { size: 14, weight: '600' },
+                                { size: 12 },
+                            ],
+                            formatter: (c) => [
+                                c.raw._data.label,
+                                c.raw.v.toLocaleString(),
+                            ],
                         },
                         backgroundColor: (c) => c.type === 'data' ? COLORS[c.dataIndex % COLORS.length] : 'transparent',
                         borderColor: t.cardBg,
@@ -2066,7 +2084,7 @@
                             bodyColor: '#e2e8f0',
                             callbacks: {
                                 title: (items) => items[0].raw._data.label,
-                                label: (item) => 'จำนวน: ' + item.raw.v,
+                                label: (item) => 'จำนวน: ' + item.raw.v.toLocaleString(),
                             },
                         },
                     },
@@ -2086,38 +2104,16 @@
             const records = getDashFilteredRecords();
             updateDashFilterInfo(lastRecords.length, records.length);
 
-            if (rt === 'enquiry') {
-                const completed = records.filter(r => r.finish_dt && String(r.finish_dt).trim()).length;
-                addCard(cards, records.length, 'Total Claims', 'blue', 'total');
-                addCard(cards, completed, 'Completed', 'green', 'completed');
-                addCard(cards, records.length - completed, 'Pending', 'amber', 'pending');
-                addCard(cards, avgTravelTime(records), 'Avg Travel Time', 'rose', 'time');
-
-                const s1 = countBy(records, 'stt_desc');
-                createBar(charts, 'สถานะงาน', s1.labels, s1.data, { showLabels: true });
-                const s2 = countBy(records, 'acc_province', 10);
-                createBar(charts, 'จังหวัดที่เกิดเหตุ', s2.labels, s2.data);
-                const s3 = countBy(records, 'checkByName', 10);
-                createBar(charts, 'ผู้ตรวจสอบงาน', s3.labels, s3.data, { showLabels: true });
-                const s4 = countBy(records, 'acc_zone');
-                createDonut(charts, 'เขตพื้นที่', s4.labels, s4.data);
-                const s5 = countBy(records, 'branch', 10);
-                createBar(charts, 'ศูนย์', s5.labels, s5.data);
-                const s6 = countBy(records, 'empcode', 10);
-                createTreemap(charts, 'พนักงานตรวจสอบ', s6.labels, s6.data);
-            } else {
-                const sent = records.filter(r => r.sendReport_dt && String(r.sendReport_dt).trim()).length;
-                addCard(cards, records.length, 'Total Closed', 'blue', 'total');
-                addCard(cards, avgTravelTime(records), 'Avg Travel Time', 'green', 'time');
-                addCard(cards, sent, 'Reports Sent', 'amber', 'sent');
-
-                const c1 = countBy(records, 'empname', 10);
-                createBar(charts, 'ผู้ปิดงาน', c1.labels, c1.data);
-                const c2 = countBy(records, 'notified_name', 10);
-                createBar(charts, 'ผู้รับแจ้ง', c2.labels, c2.data);
-                const c3 = countBy(records, 'acc_place', 10);
-                createTreemap(charts, 'สถานที่เกิดเหตุ', c3.labels, c3.data);
-            }
+            // Dashboard is dedicated to a single full-viewport treemap of the
+            // person who handled each case. For enquiry that's "ผู้ตรวจสอบงาน"
+            // (checkByName); closeClaim doesn't carry that field so the
+            // closest analogue is "ผู้ปิดงาน" (empname). countBy with no top
+            // cap returns every distinct value sorted by frequency — the
+            // treemap renderer handles long tails by shrinking cells.
+            const treemapKey = (rt === 'closeClaim') ? 'empname' : 'checkByName';
+            const treemapTitle = (rt === 'closeClaim') ? 'ผู้ปิดงาน' : 'ผู้ตรวจสอบงาน';
+            const counts = countBy(records, treemapKey);
+            createTreemap(charts, treemapTitle, counts.labels, counts.data);
         }
 
         // ========== EXPORT XLSX ==========
