@@ -2126,6 +2126,10 @@
             ReactDOM: null,
             Workbook: null,
             sourceLabel: '',
+            // Stashed by buildWorkbookData; consumers can read the current
+            // data extent without poking at the (frozen) workbook tree.
+            recordCount: 0,
+            colCount: 0,
         };
 
         function setSheetDirty(flag) {
@@ -2258,7 +2262,9 @@
 
         function buildWorkbookData(records, columns) {
             const celldata = recordsToCelldata(records, columns);
-            const lastRow = records.length; // header is row 0, data is rows 1..records.length
+            sheetState.recordCount = records.length;
+            sheetState.colCount = columns.length;
+            const lastRow = records.length; // header is row 0
             const lastCol = columns.length - 1;
             return [{
                 name: 'Sheet1',
@@ -2268,24 +2274,26 @@
                 column: Math.max(columns.length + 3, 26),
                 config: {},
                 status: 1,
-                // Pre-arm the filter range. Two reasons:
-                //   1. Filter arrows show on every header immediately — user
-                //      doesn't have to click "Create filter" in the toolbar
-                //      and risk FortuneSheet's auto-detect picking a truncated
-                //      range when sparse columns (many blank cells) trip its
-                //      "stop at the first blank row" heuristic.
-                //   2. With the range pinned to the full data extent, the
-                //      filter dropdown's getFilterColumnValues loop always
-                //      iterates every data row — so a multi-column filter+sort
-                //      sequence can't leave the values list empty due to a
-                //      mis-sized range. (Cross-column intersections that
-                //      legitimately hide every visible row still show as blank,
-                //      which is the correct behavior.)
-                filter_select: {
+                // Pre-arm the active selection to cover the full data
+                // extent. When user clicks Sort and filter > Create filter
+                // in FortuneSheet's toolbar, the filter range is built
+                // from this selection — so we bypass FortuneSheet's
+                // auto-detect (which sets row/column bounds to `null` on
+                // unselected data and corrupts the dropdown's unique-value
+                // computation).
+                //
+                // We can't fix this after the fact via onChange because
+                // FortuneSheet wraps every sheet object in Object.freeze
+                // before delivering it to the callback — mutation is a
+                // silent no-op. Seeding the right selection at mount is
+                // the only place we can influence the filter range
+                // without unmount/remount.
+                luckysheet_select_save: [{
                     row: [0, lastRow],
                     column: [0, lastCol],
-                },
-                filter: null,
+                    row_focus: 0,
+                    column_focus: 0,
+                }],
             }];
         }
 
