@@ -305,6 +305,13 @@
             gap: 12px;
         }
         #sheetLoadingOverlay.visible { display: flex; }
+        /* While the FortuneSheet assets are loading on first entry, the
+           empty-state placeholder ("ยังไม่มีข้อมูล — กรุณา Fetch ก่อน...")
+           sits behind a 90%-opaque overlay and bleeds through the gap
+           between the spinner and the overlay's loading text. Hide the
+           empty placeholder for as long as the overlay is shown so the
+           two messages don't visually collide. */
+        #sheetLoadingOverlay.visible ~ #sheetEmptyMessage { display: none; }
         .sheet-loading-text { color: #475569; font-size: 13px; }
         .sheet-spinner {
             width: 36px; height: 36px;
