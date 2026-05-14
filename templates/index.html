@@ -922,6 +922,25 @@
             document.querySelectorAll('#pivotOutput td, #pivotOutput th, #pivotOutput .pvtAttr, #pivotOutput select, #pivotOutput .pvtFilterBox label').forEach(el => el.style.fontSize = fontSize + 'px');
             fontSizeLabel.textContent = fontSize;
             localStorage.setItem('se_font_size', fontSize);
+            // The pivot's column widths are floored at the intrinsic content
+            // width of the Unused / Aggregator cells, measured once and cached
+            // on the table as _minCol1 / _minCol2. Larger font sizes grow the
+            // cell contents but the cached minimum doesn't follow, so col 2
+            // stops expanding once font size exceeds the original measurement
+            // and the Cols-area pill ("ผู้ตรวจสอบงาน" etc.) overflows. Invalidate
+            // the cache and reapply on every font change. requestAnimationFrame
+            // gives the browser one frame to relayout at the new font size
+            // before we re-measure.
+            if (typeof attachPivotResizers === 'function') {
+                requestAnimationFrame(() => {
+                    const tbl = document.querySelector('#pivotOutput table.pvtUi');
+                    if (!tbl) return;
+                    delete tbl._minCol1;
+                    delete tbl._minCol2;
+                    attachPivotResizers();
+                    if (typeof updatePivotHScroll === 'function') updatePivotHScroll();
+                });
+            }
         }
         applyFontSize(fontSize);
 
