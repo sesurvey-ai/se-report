@@ -2052,16 +2052,45 @@
                         tree,
                         key: 'value',
                         labels: {
-                            // Multi-line labels: name on top, count below.
-                            // The treemap plugin auto-clips when a cell is
-                            // too small, so tiny long-tail cells stay readable.
+                            // Two-line label per cell: name on top, count
+                            // below. Sizes scale with each cell's rendered
+                            // width / height so a 48-count cell gets a huge
+                            // label and a 3-count cell shrinks to a few px
+                            // without overflowing.
+                            //
+                            // For Thai full names (e.g. "นาย <first> <last>")
+                            // running ~14 chars at glyph-width ≈ 0.5em, the
+                            // safe horizontal divisor is w/9 so the text
+                            // fits even tall narrow cells. Height divisor
+                            // h/5 reserves vertical room for both lines
+                            // plus a bit of padding. The count uses the
+                            // same computed size × 0.7 so the relative
+                            // hierarchy (name dominant, count secondary)
+                            // stays stable as the cell scales.
                             display: true,
                             color: '#fff',
                             align: 'center',
                             position: 'middle',
                             font: [
-                                { size: 22, weight: '700' },
-                                { size: 18, weight: '600' },
+                                {
+                                    weight: '700',
+                                    size: (c) => {
+                                        const r = c.raw || {};
+                                        const byH = (r.h || 0) / 5;
+                                        const byW = (r.w || 0) / 9;
+                                        return Math.max(8, Math.min(36, Math.floor(Math.min(byH, byW))));
+                                    },
+                                },
+                                {
+                                    weight: '600',
+                                    size: (c) => {
+                                        const r = c.raw || {};
+                                        const byH = (r.h || 0) / 5;
+                                        const byW = (r.w || 0) / 9;
+                                        const name = Math.max(8, Math.min(36, Math.floor(Math.min(byH, byW))));
+                                        return Math.max(6, Math.floor(name * 0.7));
+                                    },
+                                },
                             ],
                             formatter: (c) => [
                                 c.raw._data.label,
