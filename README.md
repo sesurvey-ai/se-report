@@ -102,11 +102,19 @@ se-report/
 สร้างไฟล์ `.env`:
 
 ```env
-ISURVEY_USER=<username>
-ISURVEY_PASS=<password>
-AUTH_USER=<basic_auth_user>      # optional
-AUTH_PASS=<basic_auth_password>  # optional
+SECRET_KEY=<random_32+_char_string>
 ```
+
+สุ่ม `SECRET_KEY` ได้ด้วย:
+
+```bash
+python -c "import secrets; print(secrets.token_urlsafe(32))"
+```
+
+> ระบบไม่มี user database ของตัวเอง — login ด้วย username/password ของ
+> **iSurvey โดยตรง** เซิร์ฟเวอร์เก็บ credentials ของแต่ละ user ไว้ใน
+> หน่วยความจำเท่านั้น (ไม่บันทึกลงไฟล์/cookie ของเบราว์เซอร์) จึงต้อง
+> login ใหม่ทุกครั้งที่ restart Flask process
 
 ### 2. Run Locally
 
@@ -117,7 +125,9 @@ pip install -r requirements.txt
 python app.py
 ```
 
-เปิดเบราว์เซอร์ไปที่ `http://localhost:5000`
+เปิดเบราว์เซอร์ไปที่ `http://localhost:5000` → จะ redirect ไปหน้า
+**`/login`** กรอก username/password ของ iSurvey ที่ใช้งานอยู่แล้ว เพื่อ
+เข้าใช้ระบบ
 
 > บน macOS พอร์ต 5000 มักชนกับ AirPlay Receiver สามารถกำหนดพอร์ตอื่นผ่าน env var ได้:
 > ```bash
@@ -130,6 +140,12 @@ python app.py
 docker build -t se-report .
 docker run -p 5000:5000 --env-file .env se-report
 ```
+
+> **Gunicorn / multi-worker:** session registry เป็น in-memory dict
+> ฝังใน Flask process เดียว — ถ้า deploy ด้วย Gunicorn หลาย worker
+> ต้องเปลี่ยนไปใช้ `Flask-Session` (filesystem หรือ Redis backend) ก่อน
+> มิฉะนั้น user จะถูกเด้งกลับหน้า login ถ้า request หลังจาก login
+> ถูก route ไปอีก worker หนึ่ง
 
 ## Progress
 

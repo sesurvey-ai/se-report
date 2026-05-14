@@ -677,6 +677,22 @@
         .toolbar-controls .font-label {
             font-size: 11px; color: #64748b; font-weight: 600; margin: 0 2px;
         }
+        /* Username chip + Logout button. Chip is non-interactive; the
+           inline form wrapping Logout is sized to its child so it doesn't
+           steal flex space from the toolbar. */
+        .toolbar-controls .user-chip {
+            display: inline-flex; align-items: center; gap: 6px;
+            margin-left: 6px; padding: 4px 10px;
+            font-size: 12px; color: #cbd5e1;
+            background: #0f172a; border: 1px solid #334155;
+            border-radius: 999px; white-space: nowrap;
+        }
+        body.light .toolbar-controls .user-chip {
+            background: #f8fafc; border-color: #e2e8f0; color: #334155;
+        }
+        .toolbar-controls #logoutBtn {
+            width: auto; padding: 0 12px; font-size: 12px;
+        }
 
         /* Light theme */
         body.light { background: #f1f5f9; color: #1e293b; }
@@ -826,6 +842,18 @@
                         <circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
                     </svg>
                 </button>
+                {% if username %}
+                <span class="user-chip" title="ผู้ใช้ปัจจุบัน">
+                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                        <circle cx="12" cy="7" r="4"/>
+                    </svg>
+                    {{ username }}
+                </span>
+                <form method="POST" action="/logout" style="display:inline;">
+                    <button type="submit" id="logoutBtn" title="ออกจากระบบ">Logout</button>
+                </form>
+                {% endif %}
             </div>
         </div>
 

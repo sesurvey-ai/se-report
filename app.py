@@ -2,6 +2,7 @@ import concurrent.futures
 import json
 import os
 import queue
+import secrets
 import threading
 import time
 from datetime import datetime, timedelta
@@ -9,7 +10,10 @@ from functools import wraps
 
 import requests
 from dotenv import load_dotenv
-from flask import Flask, Response, jsonify, render_template, request
+from flask import (
+    Flask, Response, flash, jsonify, redirect, render_template, request,
+    session, url_for,
+)
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
@@ -22,28 +26,19 @@ PAGE_LIMIT = 5000
 MAX_WORKERS = 4
 REQUEST_TIMEOUT = 120
 
-
-def check_basic_auth(f):
-    @wraps(f)
-    def decorated(*args, **kwargs):
-        auth_user = os.getenv('AUTH_USER')
-        auth_pass = os.getenv('AUTH_PASS')
-        if not auth_user or not auth_pass:
-            return f(*args, **kwargs)
-        auth = request.authorization
-        if not auth or auth.username != auth_user or auth.password != auth_pass:
-            return Response(
-                'Login required.', 401,
-                {'WWW-Authenticate': 'Basic realm="SE Report"'},
-            )
-        return f(*args, **kwargs)
-    return decorated
-
 BASE_URL = 'https://cloud.isurvey.mobi/web/php'
 
 
 class ISurveyClient:
-    def __init__(self):
+    def __init__(self, username, password):
+        # Each user logs in with their own iSurvey credentials; the client
+        # keeps them in instance state so the auto re-login path can replay
+        # them when iSurvey's HTTP session expires mid-fetch. Credentials
+        # never leave the server process (in particular, they are NOT
+        # written to the Flask session cookie — the cookie only holds an
+        # opaque sid that maps to this instance via _USER_CLIENTS).
+        self.username = username
+        self.password = password
         self.session = requests.Session()
         retry = Retry(
             total=3,
@@ -69,25 +64,39 @@ class ISurveyClient:
         with self._login_lock:
             if self._logged_in:
                 return
-            user = os.getenv('ISURVEY_USER')
-            password = os.getenv('ISURVEY_PASS')
-            if not user or not password:
+            if not self.username or not self.password:
                 raise RuntimeError(
-                    'ISURVEY_USER / ISURVEY_PASS ไม่ได้ตั้งค่าใน .env'
+                    'iSurvey credentials ไม่ครบ — กรุณา login ใหม่'
                 )
             res = self.session.post(
                 f'{BASE_URL}/login.php',
-                data={'username': user, 'password': password},
+                data={'username': self.username, 'password': self.password},
                 timeout=15,
             )
             res.raise_for_status()
-            # iSurvey returns 200 even on bad credentials — verify by looking
-            # for the login form in the response body.
-            body_lower = res.text.lower()
-            if '<form' in body_lower and 'password' in body_lower:
+            # iSurvey returns 200 even on bad credentials, with one of two
+            # shapes depending on the failure mode:
+            #   1. JSON {"success": false, "message": "..."} — bad creds.
+            #   2. An HTML page containing the login form — session-expired
+            #      or other server-side errors.
+            # Treat anything that isn't an explicit JSON success or a non-
+            # login HTML page as a failure.
+            payload = None
+            try:
+                payload = res.json()
+            except ValueError:
+                payload = None
+            if isinstance(payload, dict) and payload.get('success') is False:
                 raise RuntimeError(
-                    'iSurvey login ล้มเหลว — ตรวจสอบ ISURVEY_USER / ISURVEY_PASS'
+                    'iSurvey login ล้มเหลว — ' +
+                    (payload.get('message') or 'ตรวจสอบ username / password')
                 )
+            if payload is None:
+                body_lower = res.text.lower()
+                if '<form' in body_lower and 'password' in body_lower:
+                    raise RuntimeError(
+                        'iSurvey login ล้มเหลว — ตรวจสอบ username / password'
+                    )
             self._logged_in = True
 
     def get_report_page(self, params, timeout=60):
@@ -297,17 +306,143 @@ COLUMN_MAP = {
 }
 
 app = Flask(__name__)
-client = ISurveyClient()
+# SECRET_KEY signs the Flask session cookie. Falls back to a random per-
+# process key only as a dev convenience — in that mode sessions invalidate
+# on every restart (every user has to log in again). Production should
+# always set a stable SECRET_KEY in .env.
+app.secret_key = os.getenv('SECRET_KEY') or secrets.token_urlsafe(32)
+# Idle/auto-expire window for the Flask session cookie. The session is
+# marked permanent on login and refreshed (slid) on each request through
+# the require_login decorator, so this is effectively an inactivity timer.
+app.permanent_session_lifetime = timedelta(hours=8)
+
+
+# ---------------------------------------------------------------------------
+# Per-user authentication
+#
+# We don't run a user database. iSurvey itself acts as the identity
+# provider: the login form takes a username/password, we try to log them
+# in to iSurvey, and on success we stash the resulting ISurveyClient
+# instance keyed by a random sid. The browser only ever sees that sid (in
+# the signed Flask session cookie); the actual credentials live in
+# _USER_CLIENTS in this process's memory and disappear on restart.
+#
+# In-memory by design: a Gunicorn multi-worker deploy would need a shared
+# store (e.g. Flask-Session with filesystem backend) so a login handled
+# by worker A is visible to worker B. For the current single-process dev
+# / docker setup that's not a concern.
+# ---------------------------------------------------------------------------
+_USER_CLIENTS = {}                  # sid -> ISurveyClient
+_USER_CLIENTS_LOCK = threading.Lock()
+
+
+def get_user_client():
+    """Return the ISurveyClient bound to the current Flask session, or None."""
+    sid = session.get('sid')
+    if not sid:
+        return None
+    with _USER_CLIENTS_LOCK:
+        return _USER_CLIENTS.get(sid)
+
+
+def _register_user_client(client):
+    """Generate a fresh sid, store the client, and wire it to the session."""
+    sid = secrets.token_urlsafe(32)
+    with _USER_CLIENTS_LOCK:
+        _USER_CLIENTS[sid] = client
+    session.permanent = True
+    session['sid'] = sid
+    session['username'] = client.username
+    return sid
+
+
+def _drop_current_user_client():
+    """Pop the session's sid and any registered ISurveyClient."""
+    sid = session.pop('sid', None)
+    session.pop('username', None)
+    if sid:
+        with _USER_CLIENTS_LOCK:
+            _USER_CLIENTS.pop(sid, None)
+
+
+def require_login(f):
+    """Gate a route behind a logged-in iSurvey session.
+
+    HTML routes redirect to /login when unauthenticated. The
+    /fetch-stream and /fetch endpoints return JSON / SSE errors instead
+    so the frontend can surface them without losing in-flight UI state.
+    """
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if get_user_client() is None:
+            # SSE endpoint — return an SSE-shaped error so the frontend's
+            # event-stream reader can show a useful message rather than
+            # choking on an HTML redirect body.
+            if request.path == '/fetch-stream':
+                def _err():
+                    yield (
+                        'event: error\ndata: '
+                        + json.dumps({'error': 'Session หมดอายุ — กรุณา login ใหม่'})
+                        + '\n\n'
+                    )
+                return Response(_err(), mimetype='text/event-stream')
+            if request.path == '/fetch':
+                return jsonify({'error': 'Session หมดอายุ — กรุณา login ใหม่'}), 401
+            return redirect(url_for('login_page'))
+        # Touch the session to slide the expiry window forward.
+        session.permanent = True
+        session.modified = True
+        return f(*args, **kwargs)
+    return decorated
+
+
+@app.route('/login', methods=['GET'])
+def login_page():
+    if get_user_client() is not None:
+        return redirect(url_for('index'))
+    return render_template('login.html', error=None, username='')
+
+
+@app.route('/login', methods=['POST'])
+def login_submit():
+    username = (request.form.get('username') or '').strip()
+    password = request.form.get('password') or ''
+    if not username or not password:
+        return render_template(
+            'login.html', error='กรุณากรอก username และ password',
+            username=username,
+        ), 400
+    client = ISurveyClient(username, password)
+    try:
+        client.login()
+    except Exception as e:
+        return render_template(
+            'login.html', error=str(e), username=username,
+        ), 401
+    # Replace any previous session for this browser before issuing the new sid.
+    _drop_current_user_client()
+    _register_user_client(client)
+    return redirect(url_for('index'))
+
+
+@app.route('/logout', methods=['POST'])
+def logout():
+    _drop_current_user_client()
+    return redirect(url_for('login_page'))
 
 
 @app.route('/')
-@check_basic_auth
+@require_login
 def index():
-    return render_template('index.html', column_map=COLUMN_MAP)
+    return render_template(
+        'index.html',
+        column_map=COLUMN_MAP,
+        username=session.get('username', ''),
+    )
 
 
 @app.route('/fetch', methods=['POST'])
-@check_basic_auth
+@require_login
 def fetch():
     date_from = request.form.get('date_from', '')
     date_to = request.form.get('date_to', '')
@@ -319,6 +454,7 @@ def fetch():
     except ValueError:
         return jsonify({'error': 'รูปแบบวันที่ไม่ถูกต้อง'}), 400
 
+    client = get_user_client()
     try:
         records, total = client.fetch_all_pages(df, dt, report_type)
     except Exception as e:
@@ -330,7 +466,7 @@ def fetch():
 
 
 @app.route('/fetch-stream', methods=['POST'])
-@check_basic_auth
+@require_login
 def fetch_stream():
     date_from = request.form.get('date_from', '')
     date_to = request.form.get('date_to', '')
@@ -362,6 +498,11 @@ def fetch_stream():
         ))
         cursor = chunk_end + timedelta(days=1)
         idx += 1
+
+    # Capture the user's ISurveyClient at request time. The streaming
+    # generator runs after the route returns, so we need a stable
+    # reference rather than re-reading the Flask session inside it.
+    client = get_user_client()
 
     def generate():
         try:
