@@ -220,6 +220,104 @@
         }
         .filter-dropdown .fd-cancel:hover { background: #334155; color: #e2e8f0; }
 
+        /* Spreadsheet (FortuneSheet) — theme-immune.
+           FortuneSheet's internal text (filter dropdowns, popovers,
+           context menus) inherits `color` from ancestors. When the app
+           runs in dark theme, body's light text color bled through
+           making filter values nearly invisible. The whole spreadsheet
+           subtree is forced to an always-light palette so it stays
+           readable regardless of the dark/light toggle. */
+        #spreadsheetView {
+            display: none;
+            flex: 1; min-height: 0;
+            flex-direction: column;
+            color: #1e293b;  /* break dark-theme color inheritance */
+        }
+        #sheetToolbar {
+            display: flex; gap: 8px; align-items: center;
+            padding: 8px 12px; margin-bottom: 8px;
+            border: 1px solid #e2e8f0; border-radius: 8px;
+            background: #fff;
+            flex-wrap: wrap;
+            flex-shrink: 0;
+        }
+        .sheet-btn {
+            padding: 6px 12px; font-size: 12px;
+            border: 1px solid #cbd5e1; border-radius: 6px;
+            background: transparent; color: #1e293b;
+            cursor: pointer; transition: all 0.15s;
+            font-family: inherit;
+        }
+        .sheet-btn:hover { background: #f1f5f9; }
+        .sheet-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .sheet-btn-primary {
+            border-color: #3b82f6; background: #2563eb; color: #fff;
+        }
+        .sheet-btn-primary:hover { background: #1d4ed8; color: #fff; }
+        #sheetDirtyIndicator {
+            display: none; color: #dc2626; font-size: 12px;
+        }
+        #sheetDirtyIndicator.visible { display: inline; }
+        #sheetStatus {
+            margin-left: auto; color: #64748b; font-size: 12px;
+        }
+        #fortuneSheetHost {
+            flex: 1; min-height: 300px;
+            position: relative;
+            background: #fff;
+            border: 1px solid #e2e8f0; border-radius: 8px;
+            overflow: hidden;
+            color: #1e293b;
+        }
+        /* FortuneSheet portals filter dropdowns / context menus to body
+           in some builds, escaping the #spreadsheetView subtree. These
+           explicit overrides ensure readability regardless of where the
+           popovers render. */
+        .luckysheet-filter-options,
+        .luckysheet-filter-byvalue-item,
+        .luckysheet-cols-menu,
+        .luckysheet-cols-menuitem,
+        .luckysheet-mousedown-cancel,
+        .luckysheet-rightclick-menu,
+        .fortune-context-menu,
+        .fortune-popover {
+            color: #1e293b !important;
+            background: #fff !important;
+        }
+        #sheetLoadingOverlay {
+            display: none;
+            position: absolute; inset: 0;
+            background: rgba(241, 245, 249, 0.9);
+            z-index: 10;
+            flex-direction: column;
+            align-items: center; justify-content: center;
+            gap: 12px;
+        }
+        #sheetLoadingOverlay.visible { display: flex; }
+        .sheet-loading-text { color: #475569; font-size: 13px; }
+        .sheet-spinner {
+            width: 36px; height: 36px;
+            border: 3px solid #e2e8f0;
+            border-top-color: #2563eb;
+            border-radius: 50%;
+            animation: sheet-spin 0.8s linear infinite;
+        }
+        @keyframes sheet-spin { to { transform: rotate(360deg); } }
+        #sheetEmptyMessage {
+            position: absolute; inset: 0;
+            display: flex; align-items: center; justify-content: center;
+            padding: 24px;
+            pointer-events: none;
+        }
+        #sheetEmptyMessage.hidden { display: none; }
+        #sheetEmptyMessage > .sheet-empty-text {
+            max-width: 520px;
+            text-align: center;
+            color: #94a3b8; font-size: 14px; line-height: 1.7;
+            pointer-events: auto;
+        }
+        #sheetEmptyMessage .sheet-empty-text b { color: #334155; }
+
         /* Dashboard */
         #dashboardView {
             display: none;
@@ -312,22 +410,6 @@
             white-space: normal; word-break: break-word; max-width: 140px;
             line-height: 1.25; vertical-align: middle;
         }
-        /* Click-to-sort affordance on axis label headers */
-        #pivotOutput table.pvtTable thead th.pvtAxisLabel {
-            cursor: pointer; user-select: none;
-            transition: background 0.12s;
-        }
-        #pivotOutput table.pvtTable thead th.pvtAxisLabel:hover {
-            background: #475569; color: #f1f5f9;
-        }
-        body.light #pivotOutput table.pvtTable thead th.pvtAxisLabel:hover {
-            background: #e2e8f0; color: #0f172a;
-        }
-        #pivotOutput .pvt-sort-indicator {
-            display: inline-block; margin-left: 4px;
-            font-size: 10px; opacity: 0.8; color: #60a5fa;
-        }
-        body.light #pivotOutput .pvt-sort-indicator { color: #2563eb; }
         #pivotOutput table.pvtTable tbody td {
             background: #0f172a; color: #cbd5e1; border: 1px solid #1e293b; padding: 6px 10px;
         }
@@ -731,7 +813,9 @@
                 <input type="radio" name="view" value="dashboard" id="v_dashboard">
                 <label for="v_dashboard">Dashboard</label>
                 <input type="radio" name="view" value="pivot" id="v_pivot">
-                <label for="v_pivot" style="border-left:none;">Pivot</label>
+                <label for="v_pivot">Pivot</label>
+                <input type="radio" name="view" value="spreadsheet" id="v_spreadsheet">
+                <label for="v_spreadsheet" style="border-left:none;">Spreadsheet</label>
             </div>
             <div class="toolbar-controls">
                 <button id="fontDown" title="ลดขนาดตัวอักษร">A-</button>
@@ -770,6 +854,24 @@
 
             <div id="pivotView" style="display:none;">
                 <div id="pivotOutput"></div>
+            </div>
+
+            <div id="spreadsheetView">
+                <div id="sheetToolbar">
+                    <button type="button" id="sheetNewBtn" class="sheet-btn" title="โหลดข้อมูลปัจจุบัน (จาก lastRecords) เข้า workbook ใหม่">New from data</button>
+                    <button type="button" id="sheetOpenBtn" class="sheet-btn" title="เปิดไฟล์ .fsheet.json ที่บันทึกไว้">Open</button>
+                    <button type="button" id="sheetSaveBtn" class="sheet-btn sheet-btn-primary" title="บันทึก workbook เป็นไฟล์ .fsheet.json (เก็บสูตรครบ)">Save</button>
+                    <button type="button" id="sheetSaveXlsxBtn" class="sheet-btn" title="บันทึกเป็น .xlsx (สูตรกลายเป็นค่า)">Save as XLSX</button>
+                    <span id="sheetDirtyIndicator" title="มีการแก้ไขที่ยังไม่ได้บันทึก">● unsaved</span>
+                    <span id="sheetStatus"></span>
+                </div>
+                <div id="fortuneSheetHost">
+                    <div id="sheetLoadingOverlay">
+                        <div class="sheet-spinner"></div>
+                        <div class="sheet-loading-text">กำลังโหลด FortuneSheet...</div>
+                    </div>
+                    <div id="sheetEmptyMessage"><div class="sheet-empty-text">ยังไม่มีข้อมูล — กรุณา Fetch ก่อน แล้วกลับมาที่นี่<br>หรือกดปุ่ม <b>Open</b> เพื่อโหลด workbook ที่บันทึกไว้</div></div>
+                </div>
             </div>
         </div>
     </div>
@@ -1227,18 +1329,23 @@
             tableView.style.display = view === 'table' ? 'block' : 'none';
             dashboardView.style.display = view === 'dashboard' ? 'flex' : 'none';
             pivotView.style.display = view === 'pivot' ? 'block' : 'none';
+            const spreadsheetView = document.getElementById('spreadsheetView');
+            if (spreadsheetView) spreadsheetView.style.display = view === 'spreadsheet' ? 'flex' : 'none';
             // The Pivot top bar mirrors the record count, so hide the global
-            // status text there to avoid two copies.
-            document.getElementById('status').style.display = view === 'pivot' ? 'none' : '';
-            // Auto-collapse the Columns sidebar on Pivot (redundant with
-            // pivot's own field list) and restore it on Table/Dashboard.
+            // status text there to avoid two copies. Spreadsheet has its own
+            // toolbar status, also hide.
+            document.getElementById('status').style.display =
+                (view === 'pivot' || view === 'spreadsheet') ? 'none' : '';
+            // Auto-collapse the Columns sidebar on Pivot/Spreadsheet (those
+            // views manage their own column model) and restore it elsewhere.
             // Skip on mobile where the sidebar is overlay-managed manually.
             if (!window.matchMedia('(max-width: 768px)').matches) {
-                if (view === 'pivot') sidebar.classList.add('collapsed');
+                if (view === 'pivot' || view === 'spreadsheet') sidebar.classList.add('collapsed');
                 else sidebar.classList.remove('collapsed');
             }
             if (view === 'dashboard' && lastRecords) buildDashboard();
             if (view === 'pivot' && lastRecords) buildPivot();
+            if (view === 'spreadsheet') enterSpreadsheetTab();
             updatePivotHScroll();
         }
 
@@ -1315,52 +1422,10 @@
                 attachPivotResizers();
                 attachFilterBoxDrag();
                 attachPivotTopBar();
-                attachSortHandlers();
                 updatePivotHScroll();
             });
         });
         _pivotObserver.observe(document.getElementById('pivotOutput'), { childList: true, subtree: true });
-
-        // Click any row/col axis label in the rendered pivot table to cycle
-        // through sort directions: default → ascending → descending → default.
-        // State is persisted per report type; clicking triggers a full pivot
-        // rebuild via buildPivot() which picks up the new rowOrder/colOrder.
-        function attachSortHandlers() {
-            const table = document.querySelector('#pivotOutput table.pvtTable');
-            if (!table || table._sortAttached) return;
-            const thead = table.querySelector('thead');
-            if (!thead) return;
-            const rtEl = document.querySelector('input[name=report_type]:checked');
-            if (!rtEl) return;
-            table._sortAttached = true;
-
-            const sortKey = 'se_pivot_sort_' + rtEl.value;
-            let state = {};
-            try { state = JSON.parse(localStorage.getItem(sortKey) || '{}'); }
-            catch (_) { state = {}; }
-
-            // Row axis labels live in the last row of <thead>; col axis labels
-            // live in earlier rows.
-            const lastRow = thead.querySelector('tr:last-child');
-
-            thead.querySelectorAll('th.pvtAxisLabel').forEach(th => {
-                const isRow = th.parentElement === lastRow;
-                const dir = isRow ? state.rows : state.cols;
-                if (dir) {
-                    const ind = document.createElement('span');
-                    ind.className = 'pvt-sort-indicator';
-                    ind.textContent = dir === 'desc' ? '▼' : '▲';
-                    th.appendChild(ind);
-                }
-                th.addEventListener('click', () => {
-                    const cur = isRow ? state.rows : state.cols;
-                    const next = !cur ? 'asc' : (cur === 'asc' ? 'desc' : null);
-                    if (isRow) state.rows = next; else state.cols = next;
-                    localStorage.setItem(sortKey, JSON.stringify(state));
-                    buildPivot();
-                });
-            });
-        }
 
         // Lift the renderer ("Table") selector out of pvtUi's first cell up to
         // a custom top bar, with the record count on the right. PivotTable.js
@@ -1690,23 +1755,8 @@
                 };
 
                 $(el).empty();
-                // Header-click sort state, persisted per report type.
-                // Values: undefined (pivot default) | 'asc' | 'desc'
-                const sortKey = 'se_pivot_sort_' + rt;
-                let sortState = {};
-                try { sortState = JSON.parse(localStorage.getItem(sortKey) || '{}'); }
-                catch (_) { sortState = {}; }
-                // PivotTable.js only ships 'key_a_to_z' / 'value_a_to_z' /
-                // 'value_z_to_a' — there is no 'key_z_to_a'. To get reverse-
-                // alphabetic order, keep rowOrder/colOrder at the ascending
-                // key value and supply a reversed comparator for the row or
-                // column attributes via the sorters callback.
                 const rowFields = filterLabels(savedCfg.rows);
                 const colFields = filterLabels(savedCfg.cols);
-                const rowSet = new Set(rowFields);
-                const colSet = new Set(colFields);
-                const reverseRow = sortState.rows === 'desc';
-                const reverseCol = sortState.cols === 'desc';
 
                 $(el).pivotUI(data, {
                     rows: rowFields,
@@ -1720,16 +1770,8 @@
                     // (e.g. claim numbers ~600+) still render the checklist.
                     menuLimit: 20000,
                     // Natural sort so numeric-looking strings (claim no.) order
-                    // correctly instead of lexicographically. Reverse it for
-                    // row/col attributes when their sort state is 'desc'.
-                    sorters: function (attr) {
-                        const ns = $.pivotUtilities.naturalSort;
-                        const reverse = (reverseRow && rowSet.has(attr)) ||
-                                        (reverseCol && colSet.has(attr));
-                        return reverse
-                            ? function (a, b) { return ns(b, a); }
-                            : ns;
-                    },
+                    // correctly instead of lexicographically.
+                    sorters: function () { return $.pivotUtilities.naturalSort; },
                     rowOrder: 'key_a_to_z',
                     colOrder: 'key_a_to_z',
                     renderers: $.extend(
@@ -2055,6 +2097,522 @@
             const df = document.getElementById('date_from').value;
             const dt = document.getElementById('date_to').value;
             XLSX.writeFile(wb, `SE_Report_${rt}_${df}_${dt}.xlsx`);
+        });
+
+        // ========== SPREADSHEET VIEW (FortuneSheet) ==========
+        // FortuneSheet is React-based; @fortune-sheet/react ships no UMD,
+        // so we lazy-load React + ReactDOM + the component via esm.sh on
+        // first tab entry. All persistence is client-side (Blob download /
+        // FileReader open) — no backend involvement.
+        const FS_PIN = '1.0.4';
+        const FS_DEPS = 'react@18.3.1,react-dom@18.3.1';
+        const FS_URLS = {
+            css:     `https://esm.sh/@fortune-sheet/react@${FS_PIN}/dist/index.css`,
+            react:   `https://esm.sh/react@18.3.1`,
+            reactDom:`https://esm.sh/react-dom@18.3.1/client`,
+            sheet:   `https://esm.sh/@fortune-sheet/react@${FS_PIN}?deps=${FS_DEPS}`,
+        };
+        const SHEET_TEXT_KEYS = new Set(['claim_no', 'notify_no', 'survey_no', 'preNotifyNo', 'policy_no', 'plate_no']);
+        const SHEET_PERF_THRESHOLD = 50000;
+
+        const sheetState = {
+            loaded: false,
+            loadingPromise: null,
+            mounted: false,
+            dirty: false,
+            currentData: null,
+            root: null,
+            React: null,
+            ReactDOM: null,
+            Workbook: null,
+            sourceLabel: '',
+        };
+
+        function setSheetDirty(flag) {
+            sheetState.dirty = flag;
+            const ind = document.getElementById('sheetDirtyIndicator');
+            if (ind) ind.classList.toggle('visible', !!flag);
+        }
+
+        function setSheetStatus(msg) {
+            const el = document.getElementById('sheetStatus');
+            if (el) el.textContent = msg || '';
+        }
+
+        function setSheetOverlay(visible, text) {
+            const ov = document.getElementById('sheetLoadingOverlay');
+            const tx = ov && ov.querySelector('.sheet-loading-text');
+            if (tx && text) tx.textContent = text;
+            if (ov) ov.classList.toggle('visible', !!visible);
+        }
+
+        // Reset the empty-state message back to its initial copy. Called
+        // before showing the empty state so previous error / context-specific
+        // messages don't linger across mount attempts.
+        const SHEET_EMPTY_DEFAULT_HTML =
+            'ยังไม่มีข้อมูล — กรุณา Fetch ก่อน แล้วกลับมาที่นี่<br>' +
+            'หรือกดปุ่ม <b>Open</b> เพื่อโหลด workbook ที่บันทึกไว้';
+
+        function setSheetEmptyText(html) {
+            const el = document.querySelector('#sheetEmptyMessage > .sheet-empty-text');
+            if (el) el.innerHTML = html;
+        }
+
+        function setSheetEmptyVisible(visible) {
+            const el = document.getElementById('sheetEmptyMessage');
+            if (el) el.classList.toggle('hidden', !visible);
+            if (visible) setSheetEmptyText(SHEET_EMPTY_DEFAULT_HTML);
+        }
+
+        function loadFortuneSheetAssets() {
+            if (sheetState.loaded) return Promise.resolve();
+            if (sheetState.loadingPromise) return sheetState.loadingPromise;
+
+            sheetState.loadingPromise = (async () => {
+                // Inject CSS once
+                if (!document.querySelector('link[data-fortune-sheet]')) {
+                    const link = document.createElement('link');
+                    link.rel = 'stylesheet';
+                    link.href = FS_URLS.css;
+                    link.dataset.fortuneSheet = '1';
+                    document.head.appendChild(link);
+                }
+                // Dynamic ES module imports (esm.sh bundles deps for browser)
+                const [reactMod, reactDomMod, fsMod] = await Promise.all([
+                    import(FS_URLS.react),
+                    import(FS_URLS.reactDom),
+                    import(FS_URLS.sheet),
+                ]);
+                sheetState.React = reactMod.default || reactMod;
+                sheetState.ReactDOM = reactDomMod.default || reactDomMod;
+                sheetState.Workbook = fsMod.Workbook || (fsMod.default && fsMod.default.Workbook);
+                if (!sheetState.Workbook) {
+                    throw new Error('FortuneSheet Workbook export not found');
+                }
+                sheetState.loaded = true;
+            })();
+
+            return sheetState.loadingPromise.catch(err => {
+                sheetState.loadingPromise = null;
+                throw err;
+            });
+        }
+
+        function recordsToCelldata(records, columns) {
+            // FortuneSheet celldata shape: [{r, c, v: {v, m, ct: {fa, t}}}]
+            // Match the Excel export's text-format behavior for claim_no etc.
+            const cells = [];
+            // Header row
+            columns.forEach((col, c) => {
+                cells.push({
+                    r: 0, c,
+                    v: {
+                        v: col.label, m: col.label,
+                        ct: { fa: 'General', t: 'g' },
+                        bl: 1,
+                        bg: '#f1f5f9',
+                        fc: '#1e293b',
+                    },
+                });
+            });
+            // First pass — pick one type per column so every cell in a column
+            // is uniform. FortuneSheet's filter dropdown groups unique values
+            // by (value, type); when the same column mixes numbers (t:'n')
+            // and strings (t:'s'), Sort interactions can leave the unique-
+            // value computation seeing a partitioned set and rendering an
+            // empty values list. A column is numeric only if *every* non-
+            // blank record parses as a finite number. Text columns
+            // (claim_no etc.) are always string.
+            const colTypes = columns.map((col) => {
+                if (SHEET_TEXT_KEYS.has(col.key)) return 's';
+                let allNumeric = true;
+                let sawValue = false;
+                for (let i = 0; i < records.length; i++) {
+                    const raw = records[i][col.key];
+                    if (raw === null || raw === undefined || raw === '') continue;
+                    sawValue = true;
+                    if (typeof raw === 'string' && raw.trim() === '') continue;
+                    const num = !isNaN(raw) ? Number(raw) : NaN;
+                    if (!Number.isFinite(num)) { allNumeric = false; break; }
+                }
+                return (sawValue && allNumeric) ? 'n' : 's';
+            });
+            // Data rows
+            for (let i = 0; i < records.length; i++) {
+                const rec = records[i];
+                const r = i + 1;
+                columns.forEach((col, c) => {
+                    const raw = rec[col.key];
+                    if (raw === null || raw === undefined || raw === '') return;
+                    const str = String(raw);
+                    if (colTypes[c] === 'n') {
+                        cells.push({ r, c, v: { v: Number(raw), m: str, ct: { fa: 'General', t: 'n' } } });
+                    } else {
+                        const fa = SHEET_TEXT_KEYS.has(col.key) ? '@' : 'General';
+                        cells.push({ r, c, v: { v: str, m: str, ct: { fa, t: 's' } } });
+                    }
+                });
+            }
+            return cells;
+        }
+
+        function buildWorkbookData(records, columns) {
+            const celldata = recordsToCelldata(records, columns);
+            const lastRow = records.length; // header is row 0, data is rows 1..records.length
+            const lastCol = columns.length - 1;
+            return [{
+                name: 'Sheet1',
+                celldata,
+                order: 0,
+                row: Math.max(records.length + 5, 100),
+                column: Math.max(columns.length + 3, 26),
+                config: {},
+                status: 1,
+                // Pre-arm the filter range. Two reasons:
+                //   1. Filter arrows show on every header immediately — user
+                //      doesn't have to click "Create filter" in the toolbar
+                //      and risk FortuneSheet's auto-detect picking a truncated
+                //      range when sparse columns (many blank cells) trip its
+                //      "stop at the first blank row" heuristic.
+                //   2. With the range pinned to the full data extent, the
+                //      filter dropdown's getFilterColumnValues loop always
+                //      iterates every data row — so a multi-column filter+sort
+                //      sequence can't leave the values list empty due to a
+                //      mis-sized range. (Cross-column intersections that
+                //      legitimately hide every visible row still show as blank,
+                //      which is the correct behavior.)
+                filter_select: {
+                    row: [0, lastRow],
+                    column: [0, lastCol],
+                },
+                filter: null,
+            }];
+        }
+
+        function mountFortuneSheet(workbookData, label) {
+            const host = document.getElementById('fortuneSheetHost');
+            setSheetEmptyVisible(false);
+
+            if (sheetState.root) {
+                try { sheetState.root.unmount(); } catch {}
+                sheetState.root = null;
+                sheetState.mounted = false;
+            }
+
+            // Clear any leftover children (other than persistent overlay/empty msg)
+            Array.from(host.childNodes).forEach(node => {
+                if (node.id !== 'sheetLoadingOverlay' && node.id !== 'sheetEmptyMessage') {
+                    host.removeChild(node);
+                }
+            });
+            const mountDiv = document.createElement('div');
+            mountDiv.style.width = '100%';
+            mountDiv.style.height = '100%';
+            host.appendChild(mountDiv);
+
+            const root = sheetState.ReactDOM.createRoot(mountDiv);
+            // FortuneSheet may dispatch onChange during initial render/setup.
+            // Suppress dirty marking for the first 500ms to avoid spurious
+            // "unsaved" indicator on a freshly-mounted workbook.
+            const mountedAt = Date.now();
+            const handleChange = (data) => {
+                sheetState.currentData = data;
+                if (Date.now() - mountedAt < 500) return;
+                if (sheetState.mounted) setSheetDirty(true);
+            };
+            const el = sheetState.React.createElement(sheetState.Workbook, {
+                data: workbookData,
+                onChange: handleChange,
+            });
+            root.render(el);
+
+            sheetState.root = root;
+            sheetState.currentData = workbookData;
+            sheetState.sourceLabel = label || '';
+            sheetState.mounted = true;
+            setSheetDirty(false);
+            setSheetStatus(label || '');
+        }
+
+        async function enterSpreadsheetTab() {
+            if (sheetState.mounted) return; // already populated; preserve in-memory state
+
+            // No data yet: show empty message + still preload assets so Open works
+            if (!lastRecords || lastRecords.length === 0) {
+                setSheetEmptyVisible(true);
+                setSheetStatus('');
+                try {
+                    setSheetOverlay(true, 'กำลังโหลด FortuneSheet (เตรียมไว้สำหรับ Open)...');
+                    await loadFortuneSheetAssets();
+                } catch (e) {
+                    console.error('FortuneSheet preload failed:', e);
+                    setSheetStatus('โหลด FortuneSheet ไม่สำเร็จ — เช็คเน็ต/esm.sh');
+                } finally {
+                    setSheetOverlay(false);
+                }
+                return;
+            }
+
+            const selected = getSelectedColumns();
+            if (selected.length === 0) {
+                setSheetEmptyVisible(true);
+                setSheetEmptyText('กรุณาเลือกอย่างน้อย 1 คอลัมน์ใน sidebar Columns');
+                return;
+            }
+
+            const filtered = applyColumnFilters(lastRecords);
+
+            if (filtered.length > SHEET_PERF_THRESHOLD) {
+                const ok = confirm(
+                    `Dataset มี ${filtered.length.toLocaleString()} rows — ` +
+                    `FortuneSheet ไม่ได้ออกแบบมาสำหรับ row จำนวนมาก ` +
+                    `อาจใช้เวลาโหลดและทำงานช้า\n\nต้องการดำเนินการต่อ?`
+                );
+                if (!ok) {
+                    document.getElementById('v_table').checked = true;
+                    switchView('table');
+                    return;
+                }
+            }
+
+            setSheetOverlay(true, 'กำลังโหลด FortuneSheet...');
+            try {
+                await loadFortuneSheetAssets();
+                setSheetOverlay(true, `กำลังสร้าง workbook (${filtered.length.toLocaleString()} rows × ${selected.length} cols)...`);
+                // Yield so the spinner paints before the synchronous mount work
+                await new Promise(r => setTimeout(r, 30));
+                mountFortuneSheet(
+                    buildWorkbookData(filtered, selected),
+                    `จากข้อมูล: ${filtered.length.toLocaleString()} rows × ${selected.length} cols`
+                );
+            } catch (e) {
+                console.error('FortuneSheet mount failed:', e);
+                setSheetEmptyVisible(true);
+                setSheetEmptyText(`โหลด FortuneSheet ล้มเหลว:<br><code>${(e && e.message) || e}</code><br><br>ตรวจสอบ network / esm.sh แล้วลองสลับ tab อีกครั้ง`);
+            } finally {
+                setSheetOverlay(false);
+            }
+        }
+
+        async function newFromData() {
+            if (sheetState.dirty && !confirm('มีการแก้ไขที่ยังไม่ได้บันทึก — สร้าง workbook ใหม่จะทับของเดิม\n\nต้องการต่อ?')) return;
+            if (!lastRecords || lastRecords.length === 0) {
+                alert('ยังไม่มีข้อมูล — กรุณา Fetch ก่อน');
+                return;
+            }
+            const selected = getSelectedColumns();
+            if (selected.length === 0) {
+                alert('กรุณาเลือกอย่างน้อย 1 คอลัมน์ใน sidebar Columns');
+                return;
+            }
+            const filtered = applyColumnFilters(lastRecords);
+            if (filtered.length > SHEET_PERF_THRESHOLD) {
+                if (!confirm(`Dataset มี ${filtered.length.toLocaleString()} rows — อาจช้า\n\nต้องการต่อ?`)) return;
+            }
+            try {
+                setSheetOverlay(true, 'กำลังสร้าง workbook ใหม่...');
+                await loadFortuneSheetAssets();
+                await new Promise(r => setTimeout(r, 30));
+                // Force remount (cleared by mountFortuneSheet)
+                sheetState.mounted = false;
+                mountFortuneSheet(
+                    buildWorkbookData(filtered, selected),
+                    `จากข้อมูล: ${filtered.length.toLocaleString()} rows × ${selected.length} cols`
+                );
+            } catch (e) {
+                console.error(e);
+                alert('สร้าง workbook ไม่สำเร็จ: ' + (e && e.message || e));
+            } finally {
+                setSheetOverlay(false);
+            }
+        }
+
+        function tsForFilename() {
+            const d = new Date();
+            const pad = n => String(n).padStart(2, '0');
+            return `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}_${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
+        }
+
+        // FortuneSheet's onChange emits its internal `data` (2D matrix)
+        // form, which it accepts on input but FortuneSheet's mount logic
+        // can render incorrectly if `celldata` is missing. Save/Open both
+        // need a sparse `celldata` array to round-trip reliably, and the
+        // XLSX exporter reads `celldata` too. This helper synthesizes a
+        // `celldata` array from whichever shape the sheet currently holds.
+        function extractCelldata(sheet) {
+            if (!sheet) return [];
+            if (Array.isArray(sheet.celldata) && sheet.celldata.length > 0) {
+                return sheet.celldata;
+            }
+            const matrix = sheet.data;
+            if (!Array.isArray(matrix)) return [];
+            const out = [];
+            for (let r = 0; r < matrix.length; r++) {
+                const row = matrix[r];
+                if (!Array.isArray(row)) continue;
+                for (let c = 0; c < row.length; c++) {
+                    const cell = row[c];
+                    if (cell == null) continue;
+                    // The 2D matrix stores either the `v` object directly
+                    // (FortuneSheet's normalized form) or null for empty.
+                    if (typeof cell === 'object') {
+                        // Skip cells that are truly empty (no v, no m)
+                        if (cell.v === undefined && cell.m === undefined &&
+                            cell.ct === undefined && cell.f === undefined) {
+                            continue;
+                        }
+                        out.push({ r, c, v: cell });
+                    } else if (cell !== '') {
+                        // Primitive value (rare): wrap it
+                        out.push({ r, c, v: { v: cell, m: String(cell) } });
+                    }
+                }
+            }
+            return out;
+        }
+
+        // Return a deep-ish clone of `data` where every sheet has a
+        // populated `celldata` array. Used for save (so files round-trip)
+        // and for open (so FortuneSheet renders from any saved form).
+        function normalizeWorkbook(data) {
+            if (!Array.isArray(data)) return data;
+            return data.map(sheet => {
+                if (!sheet || typeof sheet !== 'object') return sheet;
+                const celldata = extractCelldata(sheet);
+                let maxR = sheet.row || 0;
+                let maxC = sheet.column || 0;
+                celldata.forEach(c => {
+                    if (c.r + 1 > maxR) maxR = c.r + 1;
+                    if (c.c + 1 > maxC) maxC = c.c + 1;
+                });
+                return {
+                    ...sheet,
+                    celldata,
+                    row: Math.max(maxR + 5, sheet.row || 0, 100),
+                    column: Math.max(maxC + 3, sheet.column || 0, 26),
+                };
+            });
+        }
+
+        function saveSheetJson() {
+            const data = sheetState.currentData;
+            if (!data) {
+                alert('ยังไม่มี workbook ให้บันทึก');
+                return;
+            }
+            try {
+                const normalized = normalizeWorkbook(data);
+                const totalCells = normalized.reduce(
+                    (n, s) => n + (s.celldata ? s.celldata.length : 0), 0
+                );
+                if (totalCells === 0) {
+                    if (!confirm('Workbook ดูเหมือนไม่มีข้อมูล — บันทึกต่อไหม?')) return;
+                }
+                const json = JSON.stringify(normalized);
+                const blob = new Blob([json], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `SE_Report_workbook_${tsForFilename()}.fsheet.json`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                setTimeout(() => URL.revokeObjectURL(url), 1000);
+                setSheetDirty(false);
+                setSheetStatus(`บันทึกแล้ว (${(blob.size / 1024 / 1024).toFixed(2)} MB)`);
+            } catch (e) {
+                console.error(e);
+                alert('บันทึกไม่สำเร็จ: ' + (e && e.message || e));
+            }
+        }
+
+        function openSheetJson() {
+            if (sheetState.dirty && !confirm('มีการแก้ไขที่ยังไม่ได้บันทึก — เปิดไฟล์ใหม่จะทับของเดิม\n\nต้องการต่อ?')) return;
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = '.json,application/json';
+            input.style.display = 'none';
+            input.addEventListener('change', async () => {
+                const file = input.files && input.files[0];
+                document.body.removeChild(input);
+                if (!file) return;
+                try {
+                    setSheetOverlay(true, `กำลังอ่านไฟล์ ${file.name}...`);
+                    await loadFortuneSheetAssets();
+                    const text = await file.text();
+                    const data = JSON.parse(text);
+                    if (!Array.isArray(data) || data.length === 0) {
+                        throw new Error('รูปแบบไฟล์ไม่ถูกต้อง — คาดว่าเป็น array ของ sheets');
+                    }
+                    // Normalize legacy / internal-format saves so FortuneSheet
+                    // mounts reliably regardless of how the file was produced.
+                    const normalized = normalizeWorkbook(data);
+                    sheetState.mounted = false;
+                    mountFortuneSheet(normalized, `เปิดจากไฟล์: ${file.name}`);
+                } catch (e) {
+                    console.error(e);
+                    alert('เปิดไฟล์ไม่สำเร็จ: ' + (e && e.message || e));
+                } finally {
+                    setSheetOverlay(false);
+                }
+            });
+            document.body.appendChild(input);
+            input.click();
+        }
+
+        function saveSheetXlsx() {
+            const data = sheetState.currentData;
+            if (!data || !data[0]) {
+                alert('ยังไม่มี workbook ให้บันทึก');
+                return;
+            }
+            const sheet = data[0];
+            // Handle both celldata (sparse, as-built / after Open) and
+            // FortuneSheet's internal 2D `data` matrix (after onChange).
+            const cells = extractCelldata(sheet);
+            if (cells.length === 0) {
+                alert('Sheet ว่างเปล่า');
+                return;
+            }
+            try {
+                let maxR = 0, maxC = 0;
+                cells.forEach(c => {
+                    if (c.r > maxR) maxR = c.r;
+                    if (c.c > maxC) maxC = c.c;
+                });
+                const aoa = [];
+                for (let r = 0; r <= maxR; r++) {
+                    aoa.push(new Array(maxC + 1).fill(''));
+                }
+                cells.forEach(c => {
+                    const v = c.v;
+                    if (!v) return;
+                    // Prefer displayed/computed value (m); fall back to raw (v)
+                    const val = (v.m !== undefined && v.m !== null) ? v.m : v.v;
+                    aoa[c.r][c.c] = (val === null || val === undefined) ? '' : val;
+                });
+                const ws = XLSX.utils.aoa_to_sheet(aoa);
+                const wb = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(wb, ws, sheet.name || 'Sheet1');
+                XLSX.writeFile(wb, `SE_Report_workbook_${tsForFilename()}.xlsx`);
+                setSheetStatus('บันทึก .xlsx แล้ว (สูตรเป็นค่า — lossy)');
+            } catch (e) {
+                console.error(e);
+                alert('บันทึก .xlsx ไม่สำเร็จ: ' + (e && e.message || e));
+            }
+        }
+
+        document.getElementById('sheetNewBtn').addEventListener('click', newFromData);
+        document.getElementById('sheetOpenBtn').addEventListener('click', openSheetJson);
+        document.getElementById('sheetSaveBtn').addEventListener('click', saveSheetJson);
+        document.getElementById('sheetSaveXlsxBtn').addEventListener('click', saveSheetXlsx);
+
+        window.addEventListener('beforeunload', (e) => {
+            if (sheetState.dirty) {
+                e.preventDefault();
+                e.returnValue = '';
+                return '';
+            }
         });
 
         // ========== FORM SUBMIT (SSE STREAMING) ==========
