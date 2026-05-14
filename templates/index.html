@@ -2741,6 +2741,15 @@
                                 lastRecords = records;
                                 renderTable();
                                 exportBtn.style.display = 'inline-block';
+                                // Invalidate the FortuneSheet workbook so the
+                                // next time the user enters the Spreadsheet
+                                // tab (or if they're already on it) the view
+                                // remounts against the freshly-fetched data
+                                // instead of preserving the previous Fetch's
+                                // rows. enterSpreadsheetTab's early-return
+                                // gates on sheetState.mounted; clearing it
+                                // here is what lets the rebuild run.
+                                sheetState.mounted = false;
                                 const activeView = document.querySelector('input[name=view]:checked').value;
                                 switchView(activeView);
                             }
