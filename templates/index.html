@@ -2037,6 +2037,18 @@
             chartInstances.push(chart);
         }
 
+        // Strip Thai/English honorific prefixes from a person name for the
+        // dashboard label. The raw value (used for filtering / tooltips
+        // outside the formatter) is left untouched. Sentinel "(ว่าง)" and
+        // similar non-name strings are passed through.
+        const TITLE_PREFIX_RE = /^(นางสาว|น\.\s*ส\.|นาย|นาง|ด\.\s*ช\.|ด\.\s*ญ\.|Mr\.?|Mrs\.?|Miss|Ms\.?)\s*/i;
+        function stripNameTitle(s) {
+            if (s == null) return '';
+            const t = String(s).trim();
+            if (!t || t === '(ว่าง)') return t;
+            return t.replace(TITLE_PREFIX_RE, '').trim() || t;
+        }
+
         function createTreemap(container, title, labels, data) {
             const card = document.createElement('div');
             card.className = 'chart-card';
@@ -2058,15 +2070,14 @@
                             // label and a 3-count cell shrinks to a few px
                             // without overflowing.
                             //
-                            // For Thai full names (e.g. "นาย <first> <last>")
-                            // running ~14 chars at glyph-width ≈ 0.5em, the
-                            // safe horizontal divisor is w/9 so the text
-                            // fits even tall narrow cells. Height divisor
-                            // h/5 reserves vertical room for both lines
-                            // plus a bit of padding. The count uses the
-                            // same computed size × 0.7 so the relative
-                            // hierarchy (name dominant, count secondary)
-                            // stays stable as the cell scales.
+                            // Names have their honorific prefix stripped
+                            // (นาย / นาง / ฯลฯ) so the cell only has to
+                            // fit first + last name. With prefix gone the
+                            // safe horizontal divisor relaxes to w/7 (was
+                            // w/9). The count line keeps a fixed ratio of
+                            // 0.9 × name size so the hierarchy stays
+                            // readable (name dominant, count secondary
+                            // but still bold).
                             display: true,
                             color: '#fff',
                             align: 'center',
@@ -2077,23 +2088,23 @@
                                     size: (c) => {
                                         const r = c.raw || {};
                                         const byH = (r.h || 0) / 5;
-                                        const byW = (r.w || 0) / 9;
-                                        return Math.max(8, Math.min(36, Math.floor(Math.min(byH, byW))));
+                                        const byW = (r.w || 0) / 7;
+                                        return Math.max(8, Math.min(40, Math.floor(Math.min(byH, byW))));
                                     },
                                 },
                                 {
-                                    weight: '600',
+                                    weight: '700',
                                     size: (c) => {
                                         const r = c.raw || {};
                                         const byH = (r.h || 0) / 5;
-                                        const byW = (r.w || 0) / 9;
-                                        const name = Math.max(8, Math.min(36, Math.floor(Math.min(byH, byW))));
-                                        return Math.max(6, Math.floor(name * 0.7));
+                                        const byW = (r.w || 0) / 7;
+                                        const name = Math.max(8, Math.min(40, Math.floor(Math.min(byH, byW))));
+                                        return Math.max(7, Math.floor(name * 0.9));
                                     },
                                 },
                             ],
                             formatter: (c) => [
-                                c.raw._data.label,
+                                stripNameTitle(c.raw._data.label),
                                 c.raw.v.toLocaleString(),
                             ],
                         },
@@ -2112,7 +2123,7 @@
                             titleColor: '#e2e8f0',
                             bodyColor: '#e2e8f0',
                             callbacks: {
-                                title: (items) => items[0].raw._data.label,
+                                title: (items) => stripNameTitle(items[0].raw._data.label),
                                 label: (item) => 'จำนวน: ' + item.raw.v.toLocaleString(),
                             },
                         },
