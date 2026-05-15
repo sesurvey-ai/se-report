@@ -775,15 +775,15 @@
                     <input type="radio" name="report_type" value="closeClaim" id="rt_close">
                     <label for="rt_close">Close Claim</label>
                 </div>
-                <button type="submit" class="btn-fetch" id="submitBtn">Fetch</button>
+                <button type="submit" class="btn-fetch" id="submitBtn">ดึงข้อมูล</button>
             </form>
             <div class="pill-group" id="viewToggle" style="margin-left:8px;">
                 <input type="radio" name="view" value="table" id="v_table" checked>
-                <label for="v_table">Table</label>
+                <label for="v_table">ข้อมูล</label>
                 <input type="radio" name="view" value="pivot" id="v_pivot">
                 <label for="v_pivot">Pivot</label>
                 <input type="radio" name="view" value="spreadsheet" id="v_spreadsheet">
-                <label for="v_spreadsheet" style="border-left:none;">Spreadsheet</label>
+                <label for="v_spreadsheet" style="border-left:none;">Sheet</label>
             </div>
             <div class="toolbar-controls">
                 <button id="exportBtn" class="toolbar-export" title="Export Excel (.xlsx)" aria-label="Export Excel">
@@ -1987,12 +1987,21 @@
             findReplaceLocale: `${UNIVER_BASE}/@univerjs/preset-sheets-find-replace/lib/umd/locales/en-US.js`,
             cf:           `${UNIVER_BASE}/@univerjs/preset-sheets-conditional-formatting/lib/umd/index.js`,
             cfLocale:     `${UNIVER_BASE}/@univerjs/preset-sheets-conditional-formatting/lib/umd/locales/en-US.js`,
+            dataValidation:       `${UNIVER_BASE}/@univerjs/preset-sheets-data-validation/lib/umd/index.js`,
+            dataValidationLocale: `${UNIVER_BASE}/@univerjs/preset-sheets-data-validation/lib/umd/locales/en-US.js`,
+            drawing:              `${UNIVER_BASE}/@univerjs/preset-sheets-drawing/lib/umd/index.js`,
+            drawingLocale:        `${UNIVER_BASE}/@univerjs/preset-sheets-drawing/lib/umd/locales/en-US.js`,
+            hyperLink:            `${UNIVER_BASE}/@univerjs/preset-sheets-hyper-link/lib/umd/index.js`,
+            hyperLinkLocale:      `${UNIVER_BASE}/@univerjs/preset-sheets-hyper-link/lib/umd/locales/en-US.js`,
             // CSS for each preset (loaded in parallel as <link>)
             cssCore:      `${UNIVER_BASE}/@univerjs/preset-sheets-core/lib/index.css`,
             cssFilter:    `${UNIVER_BASE}/@univerjs/preset-sheets-filter/lib/index.css`,
             cssSort:      `${UNIVER_BASE}/@univerjs/preset-sheets-sort/lib/index.css`,
             cssFindReplace: `${UNIVER_BASE}/@univerjs/preset-sheets-find-replace/lib/index.css`,
             cssCf:        `${UNIVER_BASE}/@univerjs/preset-sheets-conditional-formatting/lib/index.css`,
+            cssDataValidation: `${UNIVER_BASE}/@univerjs/preset-sheets-data-validation/lib/index.css`,
+            cssDrawing:        `${UNIVER_BASE}/@univerjs/preset-sheets-drawing/lib/index.css`,
+            cssHyperLink:      `${UNIVER_BASE}/@univerjs/preset-sheets-hyper-link/lib/index.css`,
         };
         const SHEET_TEXT_KEYS = new Set(['claim_no', 'notify_no', 'survey_no', 'preNotifyNo', 'policy_no', 'plate_no']);
         const SHEET_PERF_THRESHOLD = 50000;
@@ -2117,7 +2126,9 @@
             sheetState.loadingPromise = (async () => {
                 // CSS in parallel — non-blocking for layout
                 [UNIVER_URLS.cssCore, UNIVER_URLS.cssFilter, UNIVER_URLS.cssSort,
-                 UNIVER_URLS.cssFindReplace, UNIVER_URLS.cssCf].forEach(_loadUniverCss);
+                 UNIVER_URLS.cssFindReplace, UNIVER_URLS.cssCf,
+                 UNIVER_URLS.cssDataValidation, UNIVER_URLS.cssDrawing,
+                 UNIVER_URLS.cssHyperLink].forEach(_loadUniverCss);
 
                 // Base deps must load before Univer UMDs (sequential to be safe)
                 await _loadUniverScript(UNIVER_URLS.react);
@@ -2132,10 +2143,13 @@
                 // Optional feature presets — load best-effort; if any fail to
                 // load we still proceed with whatever's available.
                 const optional = [
-                    [UNIVER_URLS.filter,       UNIVER_URLS.filterLocale],
-                    [UNIVER_URLS.sort,         UNIVER_URLS.sortLocale],
-                    [UNIVER_URLS.findReplace,  UNIVER_URLS.findReplaceLocale],
-                    [UNIVER_URLS.cf,           UNIVER_URLS.cfLocale],
+                    [UNIVER_URLS.filter,         UNIVER_URLS.filterLocale],
+                    [UNIVER_URLS.sort,           UNIVER_URLS.sortLocale],
+                    [UNIVER_URLS.findReplace,    UNIVER_URLS.findReplaceLocale],
+                    [UNIVER_URLS.cf,             UNIVER_URLS.cfLocale],
+                    [UNIVER_URLS.dataValidation, UNIVER_URLS.dataValidationLocale],
+                    [UNIVER_URLS.drawing,        UNIVER_URLS.drawingLocale],
+                    [UNIVER_URLS.hyperLink,      UNIVER_URLS.hyperLinkLocale],
                 ];
                 for (const [js, loc] of optional) {
                     try {
@@ -2320,6 +2334,9 @@
                 ['UniverPresetSheetsSort',                'UniverSheetsSortPreset',                'UniverPresetSheetsSortEnUS'],
                 ['UniverPresetSheetsFindReplace',         'UniverSheetsFindReplacePreset',         'UniverPresetSheetsFindReplaceEnUS'],
                 ['UniverPresetSheetsConditionalFormatting','UniverSheetsConditionalFormattingPreset','UniverPresetSheetsConditionalFormattingEnUS'],
+                ['UniverPresetSheetsDataValidation',       'UniverSheetsDataValidationPreset',       'UniverPresetSheetsDataValidationEnUS'],
+                ['UniverPresetSheetsDrawing',              'UniverSheetsDrawingPreset',              'UniverPresetSheetsDrawingEnUS'],
+                ['UniverPresetSheetsHyperLink',            'UniverSheetsHyperLinkPreset',            'UniverPresetSheetsHyperLinkEnUS'],
             ];
             for (const [ns, preset, locale] of opt) {
                 const nsObj = window[ns];
@@ -2710,6 +2727,16 @@
                                 // gates on sheetState.mounted; clearing it
                                 // here is what lets the rebuild run.
                                 sheetState.mounted = false;
+                                // Kick off Univer CDN download in the
+                                // background while the user explores
+                                // Table view. By the time they click
+                                // Sheet tab the ~2MB of scripts/CSS
+                                // is usually already resolved, so the
+                                // tab feels instant instead of pausing
+                                // on "กำลังโหลด Univer...". Fire-and-
+                                // forget; enterSpreadsheetTab retries
+                                // on its own if the preload errored.
+                                loadUniverAssets().catch(() => {});
                                 const activeView = document.querySelector('input[name=view]:checked').value;
                                 switchView(activeView);
                             }
