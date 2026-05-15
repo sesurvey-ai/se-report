@@ -26,6 +26,33 @@ PAGE_LIMIT = 5000
 MAX_WORKERS = 4
 REQUEST_TIMEOUT = 120
 
+# Per-user override: usernames in this set are "heavy" iSurvey accounts
+# (statistics analysts who occasionally fetch a full year of data). They get
+# a larger per-request chunk pool; everyone else stays on MAX_WORKERS, which
+# is plenty for the dominant day-by-day / 3-4-month fetch pattern. Matched
+# case-insensitively against the iSurvey login name.
+FAST_MODE_USERS = {'noppadol', 'noppadols'}
+FAST_MAX_WORKERS = 6
+
+
+def _max_workers_for(username):
+    """Per-user chunk-pool size, honoring the FAST_MODE_USERS whitelist."""
+    if username and username.lower() in FAST_MODE_USERS:
+        return FAST_MAX_WORKERS
+    return MAX_WORKERS
+
+
+# Defensive process-wide cap on concurrent iSurvey HTTP calls, pooled across
+# every user's chunk threads. Per-account quotas (~8 from prior testing) are
+# already protected by per-user max_workers (4 default, 6 for FAST_MODE_USERS);
+# this global cap guards the IP-level total when many users fetch at once.
+# Sized so up to 5 fast-mode users can run at full FAST_MAX_WORKERS=6 in
+# parallel without queueing — regular users barely register because they use
+# 1-4 slots transiently. Raise this if monitoring shows threads frequently
+# parked at the semaphore.
+ISURVEY_MAX_CONCURRENT = 30
+_ISURVEY_SEMAPHORE = threading.Semaphore(ISURVEY_MAX_CONCURRENT)
+
 BASE_URL = 'https://cloud.isurvey.mobi/web/php'
 
 
@@ -68,12 +95,17 @@ class ISurveyClient:
                 raise RuntimeError(
                     'iSurvey credentials ไม่ครบ — กรุณา login ใหม่'
                 )
-            res = self.session.post(
-                f'{BASE_URL}/login.php',
-                data={'username': self.username, 'password': self.password},
-                timeout=15,
-            )
-            res.raise_for_status()
+            # Block on the global iSurvey semaphore so a burst of fresh
+            # logins doesn't blow past the upstream rate limit. Released
+            # before the response body is parsed below since parsing is
+            # CPU-bound and the network slot is no longer needed.
+            with _ISURVEY_SEMAPHORE:
+                res = self.session.post(
+                    f'{BASE_URL}/login.php',
+                    data={'username': self.username, 'password': self.password},
+                    timeout=15,
+                )
+                res.raise_for_status()
             # iSurvey returns 200 even on bad credentials, with one of two
             # shapes depending on the failure mode:
             #   1. JSON {"success": false, "message": "..."} — bad creds.
@@ -106,12 +138,16 @@ class ISurveyClient:
         self.login()
 
         def _do_request():
-            res = self.session.get(
-                f'{BASE_URL}/report/get_data_report.php',
-                params=params,
-                timeout=timeout,
-            )
-            res.raise_for_status()
+            # Hold the global semaphore only for the network round-trip;
+            # JSON parsing happens on the already-buffered body so it can
+            # safely run without holding an iSurvey slot.
+            with _ISURVEY_SEMAPHORE:
+                res = self.session.get(
+                    f'{BASE_URL}/report/get_data_report.php',
+                    params=params,
+                    timeout=timeout,
+                )
+                res.raise_for_status()
             try:
                 return res.json()
             except ValueError as e:
@@ -503,6 +539,7 @@ def fetch_stream():
     # generator runs after the route returns, so we need a stable
     # reference rather than re-reading the Flask session inside it.
     client = get_user_client()
+    user_max_workers = _max_workers_for(client.username)
 
     def generate():
         try:
@@ -522,7 +559,7 @@ def fetch_stream():
         error_msg = None
 
         executor = concurrent.futures.ThreadPoolExecutor(
-            max_workers=min(MAX_WORKERS, chunks_total),
+            max_workers=min(user_max_workers, chunks_total),
             thread_name_prefix='isurvey-chunk',
         )
 
