@@ -4,9 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SE Report</title>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chartjs-chart-treemap@2.3.1"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0"></script>
     <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/jquery-ui-dist/jquery-ui.min.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/pivottable/dist/pivot.min.css">
@@ -333,64 +330,6 @@
         }
         #sheetEmptyMessage .sheet-empty-text b { color: #334155; }
 
-        /* Dashboard */
-        #dashboardView {
-            display: none;
-            flex: 1; min-height: 0;
-            flex-direction: column;
-        }
-        /* Summary cards row — hidden in the current dashboard layout
-           which dedicates the whole view to one big treemap. Kept in
-           the DOM so a future revert to the 2x3 grid doesn't have to
-           reintroduce the markup. */
-        .dash-cards { display: none; }
-        .dash-cards.dash-cards-visible {
-            display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-            gap: 8px; margin-bottom: 8px;
-            flex-shrink: 0;
-        }
-        .dash-card {
-            background: #1e293b; border: 1px solid #334155; border-radius: 10px;
-            padding: 10px 14px; display: flex; align-items: center; gap: 12px;
-            border-left: 4px solid;
-        }
-        .dash-card.blue { border-left-color: #3b82f6; }
-        .dash-card.green { border-left-color: #22c55e; }
-        .dash-card.amber { border-left-color: #f59e0b; }
-        .dash-card.rose { border-left-color: #f43f5e; }
-        .dash-card .card-icon {
-            width: 34px; height: 34px; border-radius: 8px; display: flex;
-            align-items: center; justify-content: center; flex-shrink: 0;
-        }
-        .dash-card .card-icon svg { width: 18px; height: 18px; }
-        .dash-card.blue .card-icon { background: rgba(59,130,246,0.15); color: #3b82f6; }
-        .dash-card.green .card-icon { background: rgba(34,197,94,0.15); color: #22c55e; }
-        .dash-card.amber .card-icon { background: rgba(245,158,11,0.15); color: #f59e0b; }
-        .dash-card.rose .card-icon { background: rgba(244,63,94,0.15); color: #f43f5e; }
-        .dash-card .card-info { display: flex; flex-direction: column; min-width: 0; }
-        .dash-card .card-value { font-size: 22px; font-weight: 800; color: #f1f5f9; line-height: 1.1; }
-        .dash-card .card-label { font-size: 11px; color: #64748b; margin-top: 2px; }
-
-        /* Chart area — flex column so the single treemap card stretches
-           to fill the remaining viewport height. (Previously a 2x3 grid
-           for six small charts.) */
-        .dash-charts {
-            display: flex; flex-direction: column;
-            gap: 8px;
-            flex: 1; min-height: 0;
-        }
-        .chart-card {
-            background: #1e293b; border: 1px solid #334155; border-radius: 10px;
-            padding: 8px 12px 4px;
-            display: flex; flex-direction: column;
-            flex: 1; min-height: 0;
-        }
-        .chart-card h4 {
-            font-size: 11px; color: #94a3b8; margin-bottom: 4px; font-weight: 600;
-            text-transform: uppercase; letter-spacing: 0.3px;
-            flex-shrink: 0;
-        }
-        .chart-card .chart-wrap { position: relative; flex: 1; min-height: 0; }
         /* Pivot dark theme */
         #pivotView { overflow: auto; }
         /* Establish a positioning context so filter dropdowns reparented to
@@ -753,11 +692,6 @@
         body.light .filter-dropdown .fd-actions { border-top-color: #e2e8f0; }
         body.light .filter-dropdown .fd-cancel { color: #64748b; border-color: #cbd5e1; }
         body.light .filter-dropdown .fd-cancel:hover { background: #f1f5f9; color: #1e293b; }
-        body.light .dash-card { background: #fff; border-color: #e2e8f0; }
-        body.light .dash-card .card-value { color: #0f172a; }
-        body.light .dash-card .card-label { color: #94a3b8; }
-        body.light .chart-card { background: #fff; border-color: #e2e8f0; }
-        body.light .chart-card h4 { color: #64748b; }
         body.light .progress-bar-wrap { background: #e2e8f0; }
         body.light .progress-text { color: #64748b; }
         body.light #pivotOutput .pvtUi { color: #1e293b; }
@@ -791,15 +725,6 @@
             .btn-fetch { flex: 1; }
             .content { padding: 12px 16px; }
             table { display: block; overflow-x: auto; }
-            #dashboardView { flex: none; }
-            .dash-charts {
-                grid-template-columns: 1fr;
-                grid-template-rows: none;
-                flex: none;
-            }
-            .chart-card .chart-wrap { flex: none; height: 220px; }
-            .dash-cards { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
-            .dash-card .card-value { font-size: 22px; }
         }
     </style>
 </head>
@@ -836,7 +761,7 @@
                     <span class="toolbar-label">To</span>
                     <input type="date" id="date_to" name="date_to" required>
                 </div>
-                <div class="pill-group">
+                <div class="pill-group" style="display:none;">
                     <input type="radio" name="report_type" value="enquiry" id="rt_enquiry" checked>
                     <label for="rt_enquiry">Enquiry</label>
                     <input type="radio" name="report_type" value="closeClaim" id="rt_close">
@@ -847,8 +772,6 @@
             <div class="pill-group" id="viewToggle" style="margin-left:8px;">
                 <input type="radio" name="view" value="table" id="v_table" checked>
                 <label for="v_table">Table</label>
-                <input type="radio" name="view" value="dashboard" id="v_dashboard">
-                <label for="v_dashboard">Dashboard</label>
                 <input type="radio" name="view" value="pivot" id="v_pivot">
                 <label for="v_pivot">Pivot</label>
                 <input type="radio" name="view" value="spreadsheet" id="v_spreadsheet">
@@ -900,12 +823,6 @@
                     <thead id="tableHead"></thead>
                     <tbody id="tableBody"></tbody>
                 </table>
-            </div>
-
-            <div id="dashboardView">
-                <div id="dashFilterInfo" style="margin-bottom:12px; font-size:13px; color:#64748b;"></div>
-                <div class="dash-cards" id="dashCards"></div>
-                <div class="dash-charts" id="dashCharts"></div>
             </div>
 
             <div id="pivotView" style="display:none;">
@@ -963,7 +880,6 @@
 
         document.getElementById('themeToggle').addEventListener('click', () => {
             applyTheme(document.body.classList.contains('light') ? 'dark' : 'light');
-            if (typeof dashboardView !== 'undefined' && dashboardView.style.display !== 'none' && lastRecords) buildDashboard();
         });
 
         // ========== FONT SIZE ==========
@@ -1067,10 +983,6 @@
                 thead.innerHTML = ''; tbody.innerHTML = '';
                 table.style.display = 'none'; status.textContent = '';
                 lastRecords = null; columnFilters = {};
-                document.getElementById('dashFilterInfo').textContent = '';
-                document.getElementById('dashCards').innerHTML = '';
-                document.getElementById('dashCharts').innerHTML = '';
-                destroyCharts();
             });
         });
 
@@ -1269,8 +1181,8 @@
         // Renders only rows inside the viewport (+ buffer) so that datasets
         // with 100k+ rows don't blow up the DOM. Top/bottom spacer <tr>s are
         // persistent anchors so tbody's scrollHeight never collapses during
-        // re-render (which would clamp scrollTop to 0). Filter/dashboard/
-        // pivot/export still operate on `lastRecords` directly.
+        // re-render (which would clamp scrollTop to 0). Filter/pivot/
+        // export still operate on `lastRecords` directly.
         let _virtualFiltered = [];
         let _virtualRange = { start: -1, end: -1 };
         let _rowHeight = 34;
@@ -1397,12 +1309,10 @@
 
         // ========== VIEW TOGGLE ==========
         const tableView = document.getElementById('tableView');
-        const dashboardView = document.getElementById('dashboardView');
         const pivotView = document.getElementById('pivotView');
 
         function switchView(view) {
             tableView.style.display = view === 'table' ? 'block' : 'none';
-            dashboardView.style.display = view === 'dashboard' ? 'flex' : 'none';
             pivotView.style.display = view === 'pivot' ? 'block' : 'none';
             const spreadsheetView = document.getElementById('spreadsheetView');
             if (spreadsheetView) spreadsheetView.style.display = view === 'spreadsheet' ? 'flex' : 'none';
@@ -1418,7 +1328,6 @@
                 if (view === 'pivot' || view === 'spreadsheet') sidebar.classList.add('collapsed');
                 else sidebar.classList.remove('collapsed');
             }
-            if (view === 'dashboard' && lastRecords) buildDashboard();
             if (view === 'pivot' && lastRecords) buildPivot();
             if (view === 'spreadsheet') enterSpreadsheetTab();
             updatePivotHScroll();
@@ -1875,289 +1784,6 @@
                 el.textContent = 'An error occurred rendering the PivotTable UI.';
                 console.error('buildPivot error:', e);
             }
-        }
-
-        // ========== DASHBOARD ==========
-        const COLORS = ['#3b82f6','#22c55e','#f59e0b','#f43f5e','#a855f7','#06b6d4','#ec4899','#84cc16','#f97316','#6366f1'];
-        let chartInstances = [];
-
-        // chartjs-plugin-datalabels v2 needs explicit registration. Disable
-        // globally and opt-in per chart via plugins.datalabels.display.
-        if (window.Chart && window.ChartDataLabels) {
-            Chart.register(window.ChartDataLabels);
-            Chart.defaults.set('plugins.datalabels', { display: false });
-        }
-
-        const CARD_ICONS = {
-            total: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/></svg>',
-            completed: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>',
-            pending: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>',
-            time: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 22h14"/><path d="M5 2h14"/><path d="M17 22v-4.172a2 2 0 0 0-.586-1.414L12 12l-4.414 4.414A2 2 0 0 0 7 17.828V22"/><path d="M7 2v4.172a2 2 0 0 0 .586 1.414L12 12l4.414-4.414A2 2 0 0 0 17 6.172V2"/></svg>',
-            sent: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>',
-        };
-
-        function getDashFilteredRecords() {
-            if (!lastRecords) return [];
-            return applyColumnFilters(lastRecords);
-        }
-
-        function updateDashFilterInfo(total, filtered) {
-            const info = document.getElementById('dashFilterInfo');
-            const activeFilters = Object.keys(columnFilters);
-            if (activeFilters.length === 0) {
-                info.textContent = '';
-            } else {
-                info.innerHTML = `Filtered: <strong style="color:#e2e8f0;">${filtered}</strong> of ${total} records (${activeFilters.length} filter active) — <a href="#" id="dashClearFilter" style="color:#3b82f6;">clear filters</a>`;
-                document.getElementById('dashClearFilter').addEventListener('click', (e) => {
-                    e.preventDefault();
-                    columnFilters = {};
-                    renderTable();
-                    buildDashboard();
-                });
-            }
-        }
-
-        function themeColors() {
-            const light = document.body.classList.contains('light');
-            return {
-                fg: light ? '#334155' : '#94a3b8',
-                cardBg: light ? '#ffffff' : '#1e293b',
-                grid: light ? '#e2e8f0' : '#334155',
-                tooltipBg: light ? '#1e293b' : '#0f172a',
-            };
-        }
-
-        function destroyCharts() { chartInstances.forEach(c => c.destroy()); chartInstances = []; }
-
-        function countBy(records, key, top) {
-            const counts = {};
-            records.forEach(r => {
-                const v = r[key];
-                const label = (v == null || String(v).trim() === '') ? '(ว่าง)' : String(v);
-                counts[label] = (counts[label] || 0) + 1;
-            });
-            let entries = Object.entries(counts).sort((a, b) => b[1] - a[1]);
-            if (top) entries = entries.slice(0, top);
-            return { labels: entries.map(e => e[0]), data: entries.map(e => e[1]) };
-        }
-
-        function avgTravelTime(records) {
-            let total = 0, count = 0;
-            records.forEach(r => {
-                const t = r.travel_time; if (!t) return;
-                const p = String(t).split(':');
-                if (p.length === 2) { total += parseInt(p[0]) * 60 + parseInt(p[1]); count++; }
-            });
-            if (!count) return '-';
-            const avg = Math.round(total / count), h = Math.floor(avg / 60), m = avg % 60;
-            return h > 0 ? `${h}h ${m}m` : `${m}m`;
-        }
-
-        function addCard(container, value, label, color, icon) {
-            const card = document.createElement('div');
-            card.className = `dash-card ${color}`;
-            card.innerHTML = `<div class="card-icon">${CARD_ICONS[icon] || CARD_ICONS.total}</div><div class="card-info"><span class="card-value">${value}</span><span class="card-label">${label}</span></div>`;
-            container.appendChild(card);
-        }
-
-        function createDonut(container, title, labels, data) {
-            const card = document.createElement('div');
-            card.className = 'chart-card';
-            card.innerHTML = `<h4>${title}</h4><div class="chart-wrap"><canvas></canvas></div>`;
-            container.appendChild(card);
-            const ctx = card.querySelector('canvas').getContext('2d');
-            const t = themeColors();
-            const chart = new Chart(ctx, {
-                type: 'doughnut',
-                data: {
-                    labels,
-                    datasets: [{
-                        data,
-                        backgroundColor: COLORS.slice(0, data.length),
-                        borderColor: t.cardBg,
-                        borderWidth: 2,
-                    }],
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    cutout: '60%',
-                    plugins: {
-                        legend: { position: 'right', labels: { color: t.fg, font: { size: 10 }, boxWidth: 12, padding: 6 } },
-                        tooltip: { backgroundColor: t.tooltipBg, titleColor: '#e2e8f0', bodyColor: '#e2e8f0' },
-                    },
-                },
-            });
-            chartInstances.push(chart);
-        }
-
-        function createBar(container, title, labels, data, opts = {}) {
-            const card = document.createElement('div');
-            card.className = 'chart-card';
-            card.innerHTML = `<h4>${title}</h4><div class="chart-wrap"><canvas></canvas></div>`;
-            container.appendChild(card);
-            const ctx = card.querySelector('canvas').getContext('2d');
-            const t = themeColors();
-            const maxValue = data.length ? Math.max(...data) : 0;
-            const chart = new Chart(ctx, {
-                type: 'bar',
-                data: {
-                    labels,
-                    datasets: [{
-                        label: 'จำนวน',
-                        data,
-                        backgroundColor: '#3b82f6',
-                        borderRadius: 4,
-                        barPercentage: 0.75,
-                    }],
-                },
-                options: {
-                    indexAxis: 'y',
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    layout: opts.showLabels ? { padding: { right: 32 } } : {},
-                    plugins: {
-                        legend: { display: false },
-                        tooltip: { backgroundColor: t.tooltipBg, titleColor: '#e2e8f0', bodyColor: '#e2e8f0' },
-                        datalabels: opts.showLabels ? {
-                            display: true,
-                            color: t.fg,
-                            anchor: 'end',
-                            align: 'end',
-                            font: { size: 10, weight: 'bold' },
-                            formatter: (v) => Number(v).toLocaleString(),
-                        } : { display: false },
-                    },
-                    scales: {
-                        x: {
-                            ticks: { color: t.fg, font: { size: 10 } },
-                            grid: { color: t.grid },
-                            suggestedMax: opts.showLabels ? Math.ceil(maxValue * 1.1) : undefined,
-                        },
-                        y: { ticks: { color: t.fg, font: { size: 12 } }, grid: { display: false } },
-                    },
-                },
-            });
-            chartInstances.push(chart);
-        }
-
-        // Strip Thai/English honorific prefixes from a person name for the
-        // dashboard label. The raw value (used for filtering / tooltips
-        // outside the formatter) is left untouched. Sentinel "(ว่าง)" and
-        // similar non-name strings are passed through.
-        const TITLE_PREFIX_RE = /^(นางสาว|น\.\s*ส\.|นาย|นาง|ด\.\s*ช\.|ด\.\s*ญ\.|Mr\.?|Mrs\.?|Miss|Ms\.?)\s*/i;
-        function stripNameTitle(s) {
-            if (s == null) return '';
-            const t = String(s).trim();
-            if (!t || t === '(ว่าง)') return t;
-            return t.replace(TITLE_PREFIX_RE, '').trim() || t;
-        }
-
-        function createTreemap(container, title, labels, data) {
-            const card = document.createElement('div');
-            card.className = 'chart-card';
-            card.innerHTML = `<h4>${title}</h4><div class="chart-wrap"><canvas></canvas></div>`;
-            container.appendChild(card);
-            const ctx = card.querySelector('canvas').getContext('2d');
-            const t = themeColors();
-            const tree = labels.map((l, i) => ({ label: l, value: data[i] }));
-            const chart = new Chart(ctx, {
-                type: 'treemap',
-                data: {
-                    datasets: [{
-                        tree,
-                        key: 'value',
-                        labels: {
-                            // Two-line label per cell: name on top, count
-                            // below. Sizes scale with each cell's rendered
-                            // width / height so a 48-count cell gets a huge
-                            // label and a 3-count cell shrinks to a few px
-                            // without overflowing.
-                            //
-                            // Names have their honorific prefix stripped
-                            // (นาย / นาง / ฯลฯ) so the cell only has to
-                            // fit first + last name. With prefix gone the
-                            // safe horizontal divisor relaxes to w/7 (was
-                            // w/9). The count line keeps a fixed ratio of
-                            // 0.9 × name size so the hierarchy stays
-                            // readable (name dominant, count secondary
-                            // but still bold).
-                            display: true,
-                            color: '#fff',
-                            align: 'center',
-                            position: 'middle',
-                            font: [
-                                {
-                                    weight: '700',
-                                    size: (c) => {
-                                        const r = c.raw || {};
-                                        const byH = (r.h || 0) / 5;
-                                        const byW = (r.w || 0) / 7;
-                                        return Math.max(8, Math.min(40, Math.floor(Math.min(byH, byW))));
-                                    },
-                                },
-                                {
-                                    weight: '700',
-                                    size: (c) => {
-                                        const r = c.raw || {};
-                                        const byH = (r.h || 0) / 5;
-                                        const byW = (r.w || 0) / 7;
-                                        const name = Math.max(8, Math.min(40, Math.floor(Math.min(byH, byW))));
-                                        return Math.max(7, Math.floor(name * 0.9));
-                                    },
-                                },
-                            ],
-                            formatter: (c) => [
-                                stripNameTitle(c.raw._data.label),
-                                c.raw.v.toLocaleString(),
-                            ],
-                        },
-                        backgroundColor: (c) => c.type === 'data' ? COLORS[c.dataIndex % COLORS.length] : 'transparent',
-                        borderColor: t.cardBg,
-                        borderWidth: 1,
-                    }],
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: { display: false },
-                        tooltip: {
-                            backgroundColor: t.tooltipBg,
-                            titleColor: '#e2e8f0',
-                            bodyColor: '#e2e8f0',
-                            callbacks: {
-                                title: (items) => stripNameTitle(items[0].raw._data.label),
-                                label: (item) => 'จำนวน: ' + item.raw.v.toLocaleString(),
-                            },
-                        },
-                    },
-                },
-            });
-            chartInstances.push(chart);
-        }
-
-        function buildDashboard() {
-            if (!lastRecords || lastRecords.length === 0) return;
-            destroyCharts();
-            const cards = document.getElementById('dashCards');
-            const charts = document.getElementById('dashCharts');
-            cards.innerHTML = ''; charts.innerHTML = '';
-
-            const rt = document.querySelector('input[name=report_type]:checked').value;
-            const records = getDashFilteredRecords();
-            updateDashFilterInfo(lastRecords.length, records.length);
-
-            // Dashboard is dedicated to a single full-viewport treemap of the
-            // person who handled each case. For enquiry that's "ผู้ตรวจสอบงาน"
-            // (checkByName); closeClaim doesn't carry that field so the
-            // closest analogue is "ผู้ปิดงาน" (empname). countBy with no top
-            // cap returns every distinct value sorted by frequency — the
-            // treemap renderer handles long tails by shrinking cells.
-            const treemapKey = (rt === 'closeClaim') ? 'empname' : 'checkByName';
-            const treemapTitle = (rt === 'closeClaim') ? 'ผู้ปิดงาน' : 'ผู้ตรวจสอบงาน';
-            const counts = countBy(records, treemapKey);
-            createTreemap(charts, treemapTitle, counts.labels, counts.data);
         }
 
         // ========== EXPORT XLSX ==========

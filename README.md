@@ -1,6 +1,6 @@
 # SE Report
 
-ระบบเว็บแอปพลิเคชันสำหรับดึงและแสดงผลรายงานเซอร์เวย์ (Survey/Claim Report) จากระบบ [iSurvey](https://cloud.isurvey.mobi) พร้อม Dashboard สรุปข้อมูลเชิงสถิติ
+ระบบเว็บแอปพลิเคชันสำหรับดึงและแสดงผลรายงานเซอร์เวย์ (Survey/Claim Report) จากระบบ [iSurvey](https://cloud.isurvey.mobi) พร้อม Pivot และ Spreadsheet view
 
 ## Tech Stack
 
@@ -8,7 +8,7 @@
 | --------- | ----------------------------------------- |
 | Backend   | Python 3.13 / Flask                       |
 | Frontend  | Vanilla HTML + CSS + JavaScript           |
-| Charts    | Chart.js v4 (+ chartjs-chart-treemap, chartjs-plugin-datalabels) + Plotly.js |
+| Charts    | Plotly.js (ผ่าน PivotTable renderers)     |
 | Pivot     | PivotTable.js + jQuery                    |
 | Spreadsheet | Univer (`@univerjs/presets` UMD via unpkg, lazy-loaded) |
 | Export    | SheetJS (xlsx)                             |
@@ -32,12 +32,6 @@
 - Sidebar เลือกแสดง/ซ่อนคอลัมน์ (Select All / Deselect All)
 - ค้นหาค่าใน filter dropdown ได้
 - **Virtual scrolling** — render เฉพาะ rows ใน viewport (+buffer) ใช้ persistent top/bottom spacer เป็น anchor เพื่อให้ `scrollHeight` คงที่; DOM คงที่ ~80 rows แม้ dataset 100k+ records
-
-### Dashboard View
-- **Single full-viewport treemap** — แสดงพนักงานตรวจสอบ (enquiry) หรือผู้ปิดงาน (closeClaim) จัดขนาดตามจำนวนเคสที่รับผิดชอบ
-- Label ปรับขนาดอัตโนมัติตามขนาด cell ที่ render จริง (ไม่ใช่ตามค่า)
-- Dashboard สะท้อน column filter ที่ตั้งไว้แบบ real-time
-- Chart.js repaint อัตโนมัติเมื่อสลับธีมสว่าง/มืด
 
 ### Pivot View
 - PivotTable.js พร้อม drag & drop fields
@@ -66,7 +60,7 @@
 - **Persistent column preferences** — จำคอลัมน์ที่เลือกแสดง/ซ่อนไว้แยกตามประเภทรายงาน
 
 ### Responsive Design
-- รองรับหน้าจอมือถือ — Sidebar overlay, Toolbar จัดเรียงอัตโนมัติ, ตาราง scroll แนวนอน, Dashboard 1 คอลัมน์
+- รองรับหน้าจอมือถือ — Sidebar overlay, Toolbar จัดเรียงอัตโนมัติ, ตาราง scroll แนวนอน
 
 ### Security
 - Basic Authentication (optional) ผ่าน environment variables
@@ -96,7 +90,7 @@ REQUEST_TIMEOUT = 120   # วินาทีต่อ request
 se-report/
 ├── app.py              # Flask backend + iSurvey API client + SSE streaming
 ├── templates/
-│   └── index.html      # Frontend (UI + Charts + Pivot + Filters)
+│   └── index.html      # Frontend (Table + Pivot + Spreadsheet + Filters)
 ├── requirements.txt    # Python dependencies
 ├── Dockerfile          # Docker image build (Gunicorn timeout 600s)
 ├── .dockerignore
@@ -188,3 +182,5 @@ docker run -p 5000:5000 --env-file .env se-report
 - [x] Spreadsheet view ด้วย FortuneSheet (lazy-load + .fsheet.json persistence)
 - [x] Migrate Spreadsheet engine จาก FortuneSheet → **Univer** — รองรับ filter / sort / find-replace / conditional formatting, theme-immune popovers, ไฟล์ persistence เปลี่ยนเป็น .univer.json
 - [x] Drop pivot column-sort feature (PivotTable.js sort เป็น global per-axis ไม่ใช่ per-column ทำให้สับสนกับ user)
+- [x] ลบ Dashboard view ออกจากโครงการ (รวมถึง Chart.js / chartjs-chart-treemap / chartjs-plugin-datalabels และ helpers ทั้งหมด) — เหลือแค่ Table / Pivot / Spreadsheet
+- [x] ซ่อน radio Enquiry / Close Claim ใน toolbar (`display:none`) — คง default `enquiry` ไว้สำหรับ form submit
