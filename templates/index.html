@@ -2306,15 +2306,7 @@
             const { LocaleType, mergeLocales } = UniverCore;
 
             const presets = [
-                UniverPresetSheetsCore.UniverSheetsCorePreset({
-                    container: 'univerMount',
-                    // Flatten the multi-tab ribbon (Start | Formulas | Data)
-                    // into a single horizontal row so Filter/Sort/Search
-                    // from the Data tab are visible at all times without
-                    // tab switching. The 'simple' variant is documented
-                    // in Univer's UI config.
-                    ribbonType: 'simple',
-                }),
+                UniverPresetSheetsCore.UniverSheetsCorePreset({ container: 'univerMount' }),
             ];
             const localeBits = [
                 typeof UniverPresetSheetsCoreEnUS !== 'undefined' ? UniverPresetSheetsCoreEnUS : {},
