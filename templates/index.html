@@ -5,13 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SE Report</title>
     <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/jquery-ui-dist/jquery-ui.min.css">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/pivottable/dist/pivot.min.css">
-    <script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/jquery-ui-dist/jquery-ui.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/pivottable/dist/pivot.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/plotly.js-dist-min/plotly.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/pivottable/dist/plotly_renderers.min.js"></script>
+    <!-- jQuery + jQuery UI + PivotTable.js + Plotly are lazy-loaded the
+         first time the user switches to the Pivot tab. Plotly alone is
+         ~1MB gzip, so eagerly loading these for users who never open the
+         pivot view is wasteful. See loadPivotAssets() in the inline
+         script below. -->
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
@@ -200,17 +198,26 @@
         .filter-dropdown .fd-search input::placeholder { color: #64748b; }
         .filter-dropdown .fd-list {
             max-height: 200px; overflow-y: auto; padding: 0 6px;
-            list-style: none;
         }
-        .filter-dropdown .fd-list li { padding: 0; }
-        .filter-dropdown .fd-list label {
+        /* Select All header — pinned above the virtual scroll container so
+           it doesn't recycle out of view on long lists. */
+        .filter-dropdown .fd-selall {
+            padding: 0 6px 6px;
+            border-bottom: 1px solid #334155;
+            margin-bottom: 4px;
+        }
+        /* fd-row is used for every checkbox row (Select All + each value).
+           Height is fixed at 26px so the virtual scroller's row-math stays
+           in sync with what's actually painted. */
+        .filter-dropdown .fd-row {
             display: flex; align-items: center; gap: 8px;
-            padding: 4px 8px; font-size: 12px; color: #cbd5e1;
+            height: 26px; padding: 0 8px; font-size: 12px; color: #cbd5e1;
             border-radius: 4px; cursor: pointer; white-space: nowrap;
             overflow: hidden; text-overflow: ellipsis;
+            box-sizing: border-box;
         }
-        .filter-dropdown .fd-list label:hover { background: #334155; }
-        .filter-dropdown .fd-list input[type=checkbox] { accent-color: #3b82f6; flex-shrink: 0; }
+        .filter-dropdown .fd-row:hover { background: #334155; }
+        .filter-dropdown .fd-row input[type=checkbox] { accent-color: #3b82f6; flex-shrink: 0; }
         .filter-dropdown .fd-actions {
             display: flex; gap: 6px; padding: 8px 10px 4px;
             border-top: 1px solid #334155; margin-top: 4px;
@@ -687,8 +694,9 @@
         body.light .filter-dropdown { background: #fff; border-color: #e2e8f0; box-shadow: 0 8px 24px rgba(0,0,0,0.1); }
         body.light .filter-dropdown .fd-search { border-bottom-color: #e2e8f0; }
         body.light .filter-dropdown .fd-search input { background: #f8fafc; color: #1e293b; border-color: #cbd5e1; }
-        body.light .filter-dropdown .fd-list label { color: #334155; }
-        body.light .filter-dropdown .fd-list label:hover { background: #f1f5f9; }
+        body.light .filter-dropdown .fd-row { color: #334155; }
+        body.light .filter-dropdown .fd-row:hover { background: #f1f5f9; }
+        body.light .filter-dropdown .fd-selall { border-bottom-color: #e2e8f0; }
         body.light .filter-dropdown .fd-actions { border-top-color: #e2e8f0; }
         body.light .filter-dropdown .fd-cancel { color: #64748b; border-color: #cbd5e1; }
         body.light .filter-dropdown .fd-cancel:hover { background: #f1f5f9; color: #1e293b; }
@@ -767,15 +775,15 @@
                     <input type="radio" name="report_type" value="closeClaim" id="rt_close">
                     <label for="rt_close">Close Claim</label>
                 </div>
-                <button type="submit" class="btn-fetch" id="submitBtn">Fetch</button>
+                <button type="submit" class="btn-fetch" id="submitBtn">ดึงข้อมูล</button>
             </form>
             <div class="pill-group" id="viewToggle" style="margin-left:8px;">
                 <input type="radio" name="view" value="table" id="v_table" checked>
-                <label for="v_table">Table</label>
+                <label for="v_table">ข้อมูล</label>
                 <input type="radio" name="view" value="pivot" id="v_pivot">
                 <label for="v_pivot">Pivot</label>
                 <input type="radio" name="view" value="spreadsheet" id="v_spreadsheet">
-                <label for="v_spreadsheet" style="border-left:none;">Spreadsheet</label>
+                <label for="v_spreadsheet" style="border-left:none;">Sheet</label>
             </div>
             <div class="toolbar-controls">
                 <button id="exportBtn" class="toolbar-export" title="Export Excel (.xlsx)" aria-label="Export Excel">
@@ -983,6 +991,7 @@
                 thead.innerHTML = ''; tbody.innerHTML = '';
                 table.style.display = 'none'; status.textContent = '';
                 lastRecords = null; columnFilters = {};
+                invalidateAllDataCaches();
             });
         });
 
@@ -990,6 +999,37 @@
         let lastRecords = null;
         let columnFilters = {};
         let openDropdown = null;
+
+        // --- Derived-data caches ---
+        // Each cache holds the result of one expensive recompute so that
+        // switching tabs / opening filter dropdowns / triggering an export
+        // does not redo work that hasn't actually changed.
+        //   _filteredCache  applyColumnFilters output. Invalidated when
+        //                   lastRecords OR columnFilters changes.
+        //   _uniqueCache    map of colKey -> sorted unique values used by
+        //                   the filter dropdown. Invalidated when
+        //                   lastRecords changes.
+        //   _pivotCache     { rt, data } memo of the label-keyed row array
+        //                   passed to pivotUI. Invalidated when lastRecords
+        //                   changes; the rt guard handles report-type
+        //                   switches when both reports coexist in memory.
+        let _filteredCache = null;
+        const _uniqueCache = new Map();
+        let _pivotCache = null;
+
+        function invalidateAllDataCaches() {
+            _filteredCache = null;
+            _uniqueCache.clear();
+            _pivotCache = null;
+        }
+        function invalidateFilterCache() {
+            _filteredCache = null;
+        }
+        function getFilteredRecords() {
+            if (_filteredCache !== null) return _filteredCache;
+            _filteredCache = lastRecords ? applyColumnFilters(lastRecords) : [];
+            return _filteredCache;
+        }
 
         let openDropdownTh = null;
 
@@ -1002,6 +1042,8 @@
 
         function getUniqueValues(key) {
             if (!lastRecords) return [];
+            const cached = _uniqueCache.get(key);
+            if (cached) return cached;
             const vals = new Set();
             let hasBlank = false;
             lastRecords.forEach(r => {
@@ -1011,6 +1053,7 @@
             });
             const sorted = [...vals].sort((a, b) => a.localeCompare(b, 'th'));
             if (hasBlank) sorted.push('');
+            _uniqueCache.set(key, sorted);
             return sorted;
         }
 
@@ -1031,6 +1074,19 @@
             const uniqueVals = getUniqueValues(colKey);
             const currentFilter = columnFilters[colKey];
 
+            // Source of truth for the dropdown's checked state. Decoupled
+            // from the DOM so the virtual scroller can recycle off-screen
+            // rows without losing selections. Initialized to the existing
+            // filter (if any), else "all checked".
+            const checkedSet = currentFilter
+                ? new Set(currentFilter)
+                : new Set(uniqueVals);
+
+            // The search-filtered subset of uniqueVals that the virtual
+            // scroller renders a window into. Replaced wholesale on each
+            // keystroke in the search box.
+            let displayVals = uniqueVals;
+
             // search
             const searchDiv = document.createElement('div');
             searchDiv.className = 'fd-search';
@@ -1039,52 +1095,105 @@
             searchDiv.appendChild(searchInput);
             dd.appendChild(searchDiv);
 
-            // list
-            const ul = document.createElement('ul');
-            ul.className = 'fd-list';
-
-            // (Select All)
-            const selAllLi = document.createElement('li');
-            const selAllLabel = document.createElement('label');
+            // Select All — pinned above the scroll container, not inside
+            // the virtualized list, so it stays visible no matter how far
+            // the user scrolls and isn't recycled by renderVisible.
+            const selAllDiv = document.createElement('div');
+            selAllDiv.className = 'fd-selall';
+            const selAllRow = document.createElement('label');
+            selAllRow.className = 'fd-row';
             const selAllCb = document.createElement('input');
             selAllCb.type = 'checkbox';
-            selAllCb.checked = !currentFilter;
-            selAllCb.dataset.selectAll = '1';
-            selAllLabel.appendChild(selAllCb);
-            selAllLabel.appendChild(document.createTextNode('(Select All)'));
-            selAllLi.appendChild(selAllLabel);
-            ul.appendChild(selAllLi);
+            selAllRow.appendChild(selAllCb);
+            selAllRow.appendChild(document.createTextNode('(Select All)'));
+            selAllDiv.appendChild(selAllRow);
+            dd.appendChild(selAllDiv);
 
-            // value items
-            uniqueVals.forEach(val => {
-                const li = document.createElement('li');
-                const lbl = document.createElement('label');
-                const cb = document.createElement('input');
-                cb.type = 'checkbox'; cb.dataset.val = val;
-                cb.checked = !currentFilter || currentFilter.has(val);
-                lbl.appendChild(cb);
-                lbl.appendChild(document.createTextNode(val === '' ? '(Blanks)' : val));
-                li.appendChild(lbl);
-                ul.appendChild(li);
-            });
+            // Virtual scroll list. Row height MUST match the CSS height
+            // on .fd-row (26px) or the math drifts and rows overlap or
+            // gap. View height matches max-height on .fd-list.
+            const ROW_H = 26;
+            const VIEW_H = 200;
+            const BUFFER = 4;
 
-            dd.appendChild(ul);
+            const list = document.createElement('div');
+            list.className = 'fd-list';
+            const sizer = document.createElement('div');
+            sizer.style.position = 'relative';
+            list.appendChild(sizer);
+            const pool = document.createElement('div');
+            pool.style.position = 'absolute';
+            pool.style.left = '0';
+            pool.style.right = '0';
+            pool.style.top = '0';
+            sizer.appendChild(pool);
+            dd.appendChild(list);
 
-            // select all logic
-            selAllCb.addEventListener('change', () => {
-                ul.querySelectorAll('input[data-val]').forEach(cb => {
-                    if (cb.closest('li').style.display !== 'none') cb.checked = selAllCb.checked;
+            function updateSelAllState() {
+                if (displayVals.length === 0) {
+                    selAllCb.checked = false;
+                    selAllCb.indeterminate = false;
+                    return;
+                }
+                let on = 0;
+                for (const v of displayVals) if (checkedSet.has(v)) on++;
+                selAllCb.checked = on === displayVals.length;
+                selAllCb.indeterminate = on > 0 && on < displayVals.length;
+            }
+
+            function renderVisible() {
+                const n = displayVals.length;
+                sizer.style.height = (n * ROW_H) + 'px';
+                const top = list.scrollTop;
+                const start = Math.max(0, Math.floor(top / ROW_H) - BUFFER);
+                const visCount = Math.ceil(VIEW_H / ROW_H) + 2 * BUFFER;
+                const end = Math.min(n, start + visCount);
+                pool.style.transform = `translateY(${start * ROW_H}px)`;
+                const frag = document.createDocumentFragment();
+                for (let i = start; i < end; i++) {
+                    const val = displayVals[i];
+                    const row = document.createElement('label');
+                    row.className = 'fd-row';
+                    const cb = document.createElement('input');
+                    cb.type = 'checkbox';
+                    cb.checked = checkedSet.has(val);
+                    cb.addEventListener('change', () => {
+                        if (cb.checked) checkedSet.add(val);
+                        else checkedSet.delete(val);
+                        updateSelAllState();
+                    });
+                    row.appendChild(cb);
+                    row.appendChild(document.createTextNode(val === '' ? '(Blanks)' : val));
+                    frag.appendChild(row);
+                }
+                pool.replaceChildren(frag);
+            }
+
+            // Coalesce scroll-driven renders to one per frame.
+            let scrollRAF = 0;
+            list.addEventListener('scroll', () => {
+                if (scrollRAF) return;
+                scrollRAF = requestAnimationFrame(() => {
+                    scrollRAF = 0;
+                    renderVisible();
                 });
             });
 
-            // search filter
             searchInput.addEventListener('input', () => {
                 const q = searchInput.value.toLowerCase();
-                ul.querySelectorAll('li').forEach(li => {
-                    if (li.querySelector('[data-select-all]')) return;
-                    const text = li.textContent.toLowerCase();
-                    li.style.display = text.includes(q) ? '' : 'none';
-                });
+                displayVals = q
+                    ? uniqueVals.filter(v => v.toLowerCase().includes(q))
+                    : uniqueVals;
+                list.scrollTop = 0;
+                renderVisible();
+                updateSelAllState();
+            });
+
+            selAllCb.addEventListener('change', () => {
+                // Toggle every currently-visible (search-filtered) value.
+                if (selAllCb.checked) displayVals.forEach(v => checkedSet.add(v));
+                else displayVals.forEach(v => checkedSet.delete(v));
+                renderVisible();
             });
 
             // actions
@@ -1094,17 +1203,14 @@
             const okBtn = document.createElement('button');
             okBtn.textContent = 'OK'; okBtn.className = 'fd-ok';
             okBtn.addEventListener('click', () => {
-                const checked = new Set();
-                ul.querySelectorAll('input[data-val]').forEach(cb => {
-                    if (cb.checked) checked.add(cb.dataset.val);
-                });
-                if (checked.size === uniqueVals.length) {
+                if (checkedSet.size === uniqueVals.length) {
                     delete columnFilters[colKey];
                     th.classList.remove('filtered');
                 } else {
-                    columnFilters[colKey] = checked;
+                    columnFilters[colKey] = checkedSet;
                     th.classList.add('filtered');
                 }
+                invalidateFilterCache();
                 closeDropdown();
                 renderRows();
             });
@@ -1120,6 +1226,9 @@
             document.body.appendChild(dd);
             openDropdown = dd;
             openDropdownTh = th;
+
+            renderVisible();
+            updateSelAllState();
             searchInput.focus();
         }
 
@@ -1193,7 +1302,7 @@
         const scrollContainer = document.querySelector('.content');
 
         function renderRows() {
-            _virtualFiltered = applyColumnFilters(lastRecords);
+            _virtualFiltered = getFilteredRecords();
             _virtualRange = { start: -1, end: -1 };
             _renderVisibleRows();
             status.textContent = `Showing ${_virtualFiltered.length} of ${lastRecords.length} records`;
@@ -1706,19 +1815,45 @@
         });
 
         // ========== PIVOT ==========
-        function buildPivot() {
+        async function buildPivot() {
             if (!lastRecords || lastRecords.length === 0) return;
             const el = document.getElementById('pivotOutput');
             try {
+                // On first entry the jQuery / PivotTable / Plotly bundle
+                // hasn't loaded yet — fetch it now and show a placeholder
+                // so the user knows why the tab is briefly empty.
+                if (!pivotAssetState.loaded) {
+                    el.innerHTML = '<div style="padding:24px;color:#94a3b8;font-size:13px;">กำลังโหลด Pivot...</div>';
+                    await loadPivotAssets();
+                    // While we were awaiting, the user may have switched
+                    // away or fetched new data. Re-validate before
+                    // continuing — buildPivot will be re-triggered by
+                    // switchView / fetch-done when needed.
+                    if (!lastRecords || lastRecords.length === 0) {
+                        el.innerHTML = '';
+                        return;
+                    }
+                }
                 const rt = document.querySelector('input[name=report_type]:checked').value;
                 const cols = COLUMN_MAP[rt] || [];
                 const validLabels = new Set(cols.map(([, label]) => label));
 
-                const data = lastRecords.map(record => {
-                    const row = {};
-                    cols.forEach(([key, label]) => { row[label] = record[key] ?? ''; });
-                    return row;
-                });
+                // Reuse the label-keyed row array if the same report type is
+                // already memoized for the current lastRecords. _pivotCache
+                // is cleared whenever lastRecords changes (see
+                // invalidateAllDataCaches), so a cache hit here is always
+                // against the live dataset.
+                let data;
+                if (_pivotCache && _pivotCache.rt === rt) {
+                    data = _pivotCache.data;
+                } else {
+                    data = lastRecords.map(record => {
+                        const row = {};
+                        cols.forEach(([key, label]) => { row[label] = record[key] ?? ''; });
+                        return row;
+                    });
+                    _pivotCache = { rt, data };
+                }
 
                 // Restore prior config saved per report type. Field selections
                 // (rows/cols/vals) are filtered against the current column set
@@ -1792,7 +1927,7 @@
             if (!lastRecords || lastRecords.length === 0) return;
             const selected = getSelectedColumns();
             if (selected.length === 0) return;
-            const filtered = applyColumnFilters(lastRecords);
+            const filtered = getFilteredRecords();
             const textCols = new Set(['claim_no']);
 
             const header = selected.map(c => c.label);
@@ -1852,12 +1987,21 @@
             findReplaceLocale: `${UNIVER_BASE}/@univerjs/preset-sheets-find-replace/lib/umd/locales/en-US.js`,
             cf:           `${UNIVER_BASE}/@univerjs/preset-sheets-conditional-formatting/lib/umd/index.js`,
             cfLocale:     `${UNIVER_BASE}/@univerjs/preset-sheets-conditional-formatting/lib/umd/locales/en-US.js`,
+            dataValidation:       `${UNIVER_BASE}/@univerjs/preset-sheets-data-validation/lib/umd/index.js`,
+            dataValidationLocale: `${UNIVER_BASE}/@univerjs/preset-sheets-data-validation/lib/umd/locales/en-US.js`,
+            drawing:              `${UNIVER_BASE}/@univerjs/preset-sheets-drawing/lib/umd/index.js`,
+            drawingLocale:        `${UNIVER_BASE}/@univerjs/preset-sheets-drawing/lib/umd/locales/en-US.js`,
+            hyperLink:            `${UNIVER_BASE}/@univerjs/preset-sheets-hyper-link/lib/umd/index.js`,
+            hyperLinkLocale:      `${UNIVER_BASE}/@univerjs/preset-sheets-hyper-link/lib/umd/locales/en-US.js`,
             // CSS for each preset (loaded in parallel as <link>)
             cssCore:      `${UNIVER_BASE}/@univerjs/preset-sheets-core/lib/index.css`,
             cssFilter:    `${UNIVER_BASE}/@univerjs/preset-sheets-filter/lib/index.css`,
             cssSort:      `${UNIVER_BASE}/@univerjs/preset-sheets-sort/lib/index.css`,
             cssFindReplace: `${UNIVER_BASE}/@univerjs/preset-sheets-find-replace/lib/index.css`,
             cssCf:        `${UNIVER_BASE}/@univerjs/preset-sheets-conditional-formatting/lib/index.css`,
+            cssDataValidation: `${UNIVER_BASE}/@univerjs/preset-sheets-data-validation/lib/index.css`,
+            cssDrawing:        `${UNIVER_BASE}/@univerjs/preset-sheets-drawing/lib/index.css`,
+            cssHyperLink:      `${UNIVER_BASE}/@univerjs/preset-sheets-hyper-link/lib/index.css`,
         };
         const SHEET_TEXT_KEYS = new Set(['claim_no', 'notify_no', 'survey_no', 'preNotifyNo', 'policy_no', 'plate_no']);
         const SHEET_PERF_THRESHOLD = 50000;
@@ -1929,6 +2073,52 @@
             document.head.appendChild(link);
         }
 
+        // ===== Pivot stack lazy-loader =====
+        // jQuery + jQuery UI + PivotTable.js + Plotly are only needed when
+        // the user actually opens the Pivot tab. Loading them on first
+        // tab entry (instead of at page load) saves ~1MB gzip — most of
+        // which is Plotly.
+        const PIVOT_URLS = {
+            jqueryUiCss:     'https://cdn.jsdelivr.net/npm/jquery-ui-dist/jquery-ui.min.css',
+            pivotCss:        'https://cdn.jsdelivr.net/npm/pivottable/dist/pivot.min.css',
+            jquery:          'https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js',
+            jqueryUi:        'https://cdn.jsdelivr.net/npm/jquery-ui-dist/jquery-ui.min.js',
+            pivot:           'https://cdn.jsdelivr.net/npm/pivottable/dist/pivot.min.js',
+            plotly:          'https://cdn.jsdelivr.net/npm/plotly.js-dist-min/plotly.min.js',
+            plotlyRenderers: 'https://cdn.jsdelivr.net/npm/pivottable/dist/plotly_renderers.min.js',
+        };
+        const pivotAssetState = { loaded: false, loadingPromise: null };
+
+        function loadPivotAssets() {
+            if (pivotAssetState.loaded) return Promise.resolve();
+            if (pivotAssetState.loadingPromise) return pivotAssetState.loadingPromise;
+
+            pivotAssetState.loadingPromise = (async () => {
+                // CSS in parallel — non-blocking.
+                _loadUniverCss(PIVOT_URLS.jqueryUiCss);
+                _loadUniverCss(PIVOT_URLS.pivotCss);
+                // Order matters: jQuery must define $/jQuery before
+                // jQuery UI and PivotTable register against it. Plotly
+                // is independent of jQuery but the plotly_renderers
+                // adapter expects both Plotly and PivotTable globals.
+                await _loadUniverScript(PIVOT_URLS.jquery);
+                await _loadUniverScript(PIVOT_URLS.jqueryUi);
+                await _loadUniverScript(PIVOT_URLS.pivot);
+                await _loadUniverScript(PIVOT_URLS.plotly);
+                await _loadUniverScript(PIVOT_URLS.plotlyRenderers);
+                if (typeof window.$ === 'undefined' ||
+                    typeof window.$.pivotUtilities === 'undefined') {
+                    throw new Error('Pivot globals not found after script load');
+                }
+                pivotAssetState.loaded = true;
+            })();
+
+            return pivotAssetState.loadingPromise.catch(err => {
+                pivotAssetState.loadingPromise = null;
+                throw err;
+            });
+        }
+
         function loadUniverAssets() {
             if (sheetState.loaded) return Promise.resolve();
             if (sheetState.loadingPromise) return sheetState.loadingPromise;
@@ -1936,7 +2126,9 @@
             sheetState.loadingPromise = (async () => {
                 // CSS in parallel — non-blocking for layout
                 [UNIVER_URLS.cssCore, UNIVER_URLS.cssFilter, UNIVER_URLS.cssSort,
-                 UNIVER_URLS.cssFindReplace, UNIVER_URLS.cssCf].forEach(_loadUniverCss);
+                 UNIVER_URLS.cssFindReplace, UNIVER_URLS.cssCf,
+                 UNIVER_URLS.cssDataValidation, UNIVER_URLS.cssDrawing,
+                 UNIVER_URLS.cssHyperLink].forEach(_loadUniverCss);
 
                 // Base deps must load before Univer UMDs (sequential to be safe)
                 await _loadUniverScript(UNIVER_URLS.react);
@@ -1951,10 +2143,13 @@
                 // Optional feature presets — load best-effort; if any fail to
                 // load we still proceed with whatever's available.
                 const optional = [
-                    [UNIVER_URLS.filter,       UNIVER_URLS.filterLocale],
-                    [UNIVER_URLS.sort,         UNIVER_URLS.sortLocale],
-                    [UNIVER_URLS.findReplace,  UNIVER_URLS.findReplaceLocale],
-                    [UNIVER_URLS.cf,           UNIVER_URLS.cfLocale],
+                    [UNIVER_URLS.filter,         UNIVER_URLS.filterLocale],
+                    [UNIVER_URLS.sort,           UNIVER_URLS.sortLocale],
+                    [UNIVER_URLS.findReplace,    UNIVER_URLS.findReplaceLocale],
+                    [UNIVER_URLS.cf,             UNIVER_URLS.cfLocale],
+                    [UNIVER_URLS.dataValidation, UNIVER_URLS.dataValidationLocale],
+                    [UNIVER_URLS.drawing,        UNIVER_URLS.drawingLocale],
+                    [UNIVER_URLS.hyperLink,      UNIVER_URLS.hyperLinkLocale],
                 ];
                 for (const [js, loc] of optional) {
                     try {
@@ -1984,22 +2179,36 @@
         const UNIVER_T_STRING = 1;
         const UNIVER_T_NUMBER = 2;
 
-        function recordsToUniverWorkbook(records, columns, name) {
+        // Rows scanned to infer a column's numeric/string type. Big datasets
+        // would otherwise pay O(rows) per numeric-looking column just to
+        // confirm — sampling 200 rows is enough for the iSurvey schema
+        // (numeric columns are uniformly numeric in practice; text columns
+        // are pinned via SHEET_TEXT_KEYS). The cell loop has a per-cell
+        // fallback for the rare 'numeric-by-sample but mixed' edge case.
+        const TYPE_INFER_SAMPLE = 200;
+        // Rows per chunk when building cellData. The overlay can repaint
+        // and the browser stays responsive between chunks; 5k is small
+        // enough for sub-100ms work per chunk on typical hardware while
+        // keeping total yield count low (50k rows = 10 yields).
+        const WORKBOOK_CHUNK = 5000;
+
+        async function recordsToUniverWorkbook(records, columns, name, onProgress) {
             // Decide per-column type up front so a column is uniform — Univer's
             // built-in filter UI groups unique values by raw value, and mixed
-            // types in one column can produce odd ordering. A column is
-            // numeric only if *every* non-blank record parses as a finite
-            // number; text columns (claim_no etc.) are always string.
+            // types in one column can produce odd ordering. Sampled to
+            // TYPE_INFER_SAMPLE non-blank rows; text columns (claim_no etc.)
+            // are always string.
             const colTypes = columns.map((col) => {
                 if (SHEET_TEXT_KEYS.has(col.key)) return 's';
                 let allNumeric = true;
                 let sawValue = false;
-                for (let i = 0; i < records.length; i++) {
+                const limit = Math.min(records.length, TYPE_INFER_SAMPLE);
+                for (let i = 0; i < limit; i++) {
                     const raw = records[i][col.key];
                     if (raw === null || raw === undefined || raw === '') continue;
-                    sawValue = true;
                     if (typeof raw === 'string' && raw.trim() === '') continue;
-                    const num = !isNaN(raw) ? Number(raw) : NaN;
+                    sawValue = true;
+                    const num = Number(raw);
                     if (!Number.isFinite(num)) { allNumeric = false; break; }
                 }
                 return (sawValue && allNumeric) ? 'n' : 's';
@@ -2009,32 +2218,52 @@
             // Sparse — only emit non-empty cells.
             const cellData = { 0: {} };
             // Header row (row 0)
-            columns.forEach((col, c) => {
+            for (let c = 0; c < columns.length; c++) {
                 cellData[0][c] = {
-                    v: col.label,
+                    v: columns[c].label,
                     t: UNIVER_T_STRING,
                     s: { bl: 1, bg: { rgb: '#f1f5f9' }, cl: { rgb: '#1e293b' } },
                 };
-            });
-            // Data rows
-            for (let i = 0; i < records.length; i++) {
+            }
+            // Data rows — chunked + async-yielding so the overlay text/
+            // spinner repaints between chunks. Inner column loop is a
+            // tight for() (not forEach) because it runs records.length ×
+            // columns.length times; closures per cell add up to tens of
+            // ms at 50k+ rows.
+            const total = records.length;
+            const nCols = columns.length;
+            for (let i = 0; i < total; i++) {
                 const rec = records[i];
                 const r = i + 1;
                 const row = {};
                 let touched = false;
-                columns.forEach((col, c) => {
-                    const raw = rec[col.key];
-                    if (raw === null || raw === undefined || raw === '') return;
-                    const str = String(raw);
+                for (let c = 0; c < nCols; c++) {
+                    const raw = rec[columns[c].key];
+                    if (raw === null || raw === undefined || raw === '') continue;
                     if (colTypes[c] === 'n') {
-                        row[c] = { v: Number(raw), t: UNIVER_T_NUMBER };
+                        const num = Number(raw);
+                        if (Number.isFinite(num)) {
+                            row[c] = { v: num, t: UNIVER_T_NUMBER };
+                        } else {
+                            // Sample said numeric, this value isn't —
+                            // fall back to string for THIS cell so we
+                            // don't write a NaN-valued numeric cell.
+                            row[c] = { v: String(raw), t: UNIVER_T_STRING };
+                        }
                     } else {
-                        row[c] = { v: str, t: UNIVER_T_STRING };
+                        row[c] = { v: String(raw), t: UNIVER_T_STRING };
                     }
                     touched = true;
-                });
+                }
                 if (touched) cellData[r] = row;
+                if ((i + 1) % WORKBOOK_CHUNK === 0 && i + 1 < total) {
+                    if (onProgress) onProgress(i + 1, total);
+                    // setTimeout(0) gives the browser one frame to repaint
+                    // the overlay text before resuming.
+                    await new Promise(res => setTimeout(res, 0));
+                }
             }
+            if (onProgress) onProgress(total, total);
 
             sheetState.recordCount = records.length;
             sheetState.colCount = columns.length;
@@ -2113,6 +2342,9 @@
                 ['UniverPresetSheetsSort',                'UniverSheetsSortPreset',                'UniverPresetSheetsSortEnUS'],
                 ['UniverPresetSheetsFindReplace',         'UniverSheetsFindReplacePreset',         'UniverPresetSheetsFindReplaceEnUS'],
                 ['UniverPresetSheetsConditionalFormatting','UniverSheetsConditionalFormattingPreset','UniverPresetSheetsConditionalFormattingEnUS'],
+                ['UniverPresetSheetsDataValidation',       'UniverSheetsDataValidationPreset',       'UniverPresetSheetsDataValidationEnUS'],
+                ['UniverPresetSheetsDrawing',              'UniverSheetsDrawingPreset',              'UniverPresetSheetsDrawingEnUS'],
+                ['UniverPresetSheetsHyperLink',            'UniverSheetsHyperLinkPreset',            'UniverPresetSheetsHyperLinkEnUS'],
             ];
             for (const [ns, preset, locale] of opt) {
                 const nsObj = window[ns];
@@ -2186,7 +2418,7 @@
                 return;
             }
 
-            const filtered = applyColumnFilters(lastRecords);
+            const filtered = getFilteredRecords();
 
             if (filtered.length > SHEET_PERF_THRESHOLD) {
                 const ok = confirm(
@@ -2206,8 +2438,17 @@
                 setSheetOverlay(true, `กำลังสร้าง workbook (${filtered.length.toLocaleString()} rows × ${selected.length} cols)...`);
                 // Yield so the spinner paints before the synchronous mount work
                 await new Promise(r => setTimeout(r, 30));
+                const wb = await recordsToUniverWorkbook(
+                    filtered, selected, null,
+                    (done, total) => setSheetOverlay(
+                        true,
+                        `กำลังสร้าง workbook... ${done.toLocaleString()}/${total.toLocaleString()} rows`,
+                    ),
+                );
+                setSheetOverlay(true, 'กำลัง mount workbook...');
+                await new Promise(r => setTimeout(r, 0));
                 mountUniver(
-                    recordsToUniverWorkbook(filtered, selected),
+                    wb,
                     `จากข้อมูล: ${filtered.length.toLocaleString()} rows × ${selected.length} cols`
                 );
             } catch (e) {
@@ -2230,7 +2471,7 @@
                 alert('กรุณาเลือกอย่างน้อย 1 คอลัมน์ใน sidebar Columns');
                 return;
             }
-            const filtered = applyColumnFilters(lastRecords);
+            const filtered = getFilteredRecords();
             if (filtered.length > SHEET_PERF_THRESHOLD) {
                 if (!confirm(`Dataset มี ${filtered.length.toLocaleString()} rows — อาจช้า\n\nต้องการต่อ?`)) return;
             }
@@ -2238,9 +2479,18 @@
                 setSheetOverlay(true, 'กำลังสร้าง workbook ใหม่...');
                 await loadUniverAssets();
                 await new Promise(r => setTimeout(r, 30));
+                const wb = await recordsToUniverWorkbook(
+                    filtered, selected, null,
+                    (done, total) => setSheetOverlay(
+                        true,
+                        `กำลังสร้าง workbook... ${done.toLocaleString()}/${total.toLocaleString()} rows`,
+                    ),
+                );
+                setSheetOverlay(true, 'กำลัง mount workbook...');
+                await new Promise(r => setTimeout(r, 0));
                 sheetState.mounted = false;
                 mountUniver(
-                    recordsToUniverWorkbook(filtered, selected),
+                    wb,
                     `จากข้อมูล: ${filtered.length.toLocaleString()} rows × ${selected.length} cols`
                 );
             } catch (e) {
@@ -2342,34 +2592,41 @@
                                 Object.keys(snapshot.sheets)[0];
                 const sheet = snapshot.sheets[sheetId];
                 const cellData = (sheet && sheet.cellData) || {};
+                // Build the SheetJS worksheet directly from the sparse
+                // cellData instead of materializing a dense (maxR+1)×(maxC+1)
+                // array of '' first. At 50k×49 the dense pre-fill alone
+                // allocates ~2.5M strings; the sparse write iterates only
+                // the cells that actually exist (usually <1M).
+                const ws = {};
                 let maxR = -1, maxC = -1;
-                const rowKeys = Object.keys(cellData);
-                rowKeys.forEach(r => {
-                    const ri = +r;
+                for (const rkey in cellData) {
+                    if (!Object.prototype.hasOwnProperty.call(cellData, rkey)) continue;
+                    const ri = +rkey;
                     if (ri > maxR) maxR = ri;
-                    Object.keys(cellData[r]).forEach(c => {
-                        const ci = +c;
+                    const rowCells = cellData[rkey];
+                    for (const ckey in rowCells) {
+                        if (!Object.prototype.hasOwnProperty.call(rowCells, ckey)) continue;
+                        const ci = +ckey;
                         if (ci > maxC) maxC = ci;
-                    });
-                });
+                        const cell = rowCells[ckey];
+                        const v = cell && cell.v;
+                        if (v === null || v === undefined || v === '') continue;
+                        const addr = XLSX.utils.encode_cell({ r: ri, c: ci });
+                        const t = (typeof v === 'number' && Number.isFinite(v)) ? 'n' : 's';
+                        ws[addr] = { v, t };
+                    }
+                }
                 if (maxR < 0 || maxC < 0) {
                     alert('Sheet ว่างเปล่า');
                     return;
                 }
-                const aoa = [];
-                for (let r = 0; r <= maxR; r++) {
-                    aoa.push(new Array(maxC + 1).fill(''));
-                }
-                rowKeys.forEach(r => {
-                    const ri = +r;
-                    Object.keys(cellData[r]).forEach(c => {
-                        const ci = +c;
-                        const cell = cellData[r][c];
-                        const val = cell && (cell.v != null ? cell.v : '');
-                        aoa[ri][ci] = (val === null || val === undefined) ? '' : val;
-                    });
+                // SheetJS requires '!ref' to define the worksheet's
+                // bounding range; without it the file opens but Excel
+                // sees an empty sheet.
+                ws['!ref'] = XLSX.utils.encode_range({
+                    s: { r: 0, c: 0 },
+                    e: { r: maxR, c: maxC },
                 });
-                const ws = XLSX.utils.aoa_to_sheet(aoa);
                 const wb = XLSX.utils.book_new();
                 XLSX.utils.book_append_sheet(wb, ws, sheet.name || 'Sheet1');
                 XLSX.writeFile(wb, `SE_Report_workbook_${tsForFilename()}.xlsx`);
@@ -2413,6 +2670,7 @@
             exportBtn.style.display = 'none';
             lastRecords = null;
             columnFilters = {};
+            invalidateAllDataCaches();
 
             progressFill.style.width = '0%';
             progressText.textContent = 'Connecting...';
@@ -2462,6 +2720,7 @@
                                 status.textContent = 'No data found.';
                             } else {
                                 lastRecords = records;
+                                invalidateAllDataCaches();
                                 renderTable();
                                 // inline-flex preserves the inherited
                                 // align/justify-center from .toolbar-controls
@@ -2476,6 +2735,16 @@
                                 // gates on sheetState.mounted; clearing it
                                 // here is what lets the rebuild run.
                                 sheetState.mounted = false;
+                                // Kick off Univer CDN download in the
+                                // background while the user explores
+                                // Table view. By the time they click
+                                // Sheet tab the ~2MB of scripts/CSS
+                                // is usually already resolved, so the
+                                // tab feels instant instead of pausing
+                                // on "กำลังโหลด Univer...". Fire-and-
+                                // forget; enterSpreadsheetTab retries
+                                // on its own if the preload errored.
+                                loadUniverAssets().catch(() => {});
                                 const activeView = document.querySelector('input[name=view]:checked').value;
                                 switchView(activeView);
                             }
