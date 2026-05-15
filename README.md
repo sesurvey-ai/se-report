@@ -10,6 +10,7 @@
 | Frontend  | Vanilla HTML + CSS + JavaScript           |
 | Charts    | Chart.js v4 (+ chartjs-chart-treemap, chartjs-plugin-datalabels) + Plotly.js |
 | Pivot     | PivotTable.js + jQuery                    |
+| Spreadsheet | Univer (`@univerjs/presets` UMD via unpkg, lazy-loaded) |
 | Export    | SheetJS (xlsx)                             |
 | Deploy    | Docker + Gunicorn                         |
 | API       | iSurvey REST API                          |
@@ -33,11 +34,8 @@
 - **Virtual scrolling** — render เฉพาะ rows ใน viewport (+buffer) ใช้ persistent top/bottom spacer เป็น anchor เพื่อให้ `scrollHeight` คงที่; DOM คงที่ ~80 rows แม้ dataset 100k+ records
 
 ### Dashboard View
-- **Summary Cards** — จำนวนเคลมทั้งหมด, เสร็จแล้ว, รอดำเนินการ, เวลาเดินทางเฉลี่ย
-- **Bar Charts** — สถานะงาน (พร้อม data label), ผู้ตรวจสอบงาน (พร้อม data label), จังหวัดที่เกิดเหตุ, ศูนย์
-- **Donut Chart** — เขตพื้นที่
-- **Treemap** — พนักงานตรวจสอบ
-- **Fit-to-viewport layout** — flex grid 2×3 ปรับขนาด chart อัตโนมัติให้เห็นทั้ง dashboard ในหน้าจอเดียวโดยไม่ต้อง zoom out
+- **Single full-viewport treemap** — แสดงพนักงานตรวจสอบ (enquiry) หรือผู้ปิดงาน (closeClaim) จัดขนาดตามจำนวนเคสที่รับผิดชอบ
+- Label ปรับขนาดอัตโนมัติตามขนาด cell ที่ render จริง (ไม่ใช่ตามค่า)
 - Dashboard สะท้อน column filter ที่ตั้งไว้แบบ real-time
 - Chart.js repaint อัตโนมัติเมื่อสลับธีมสว่าง/มืด
 
@@ -45,6 +43,17 @@
 - PivotTable.js พร้อม drag & drop fields
 - รองรับ chart renderers ผ่าน Plotly.js (Bar, Line, Area, Scatter, Pie ฯลฯ)
 - Aggregators: Count, Sum, Average ฯลฯ
+- Natural sort (numeric-aware) ของ field values
+
+### Spreadsheet View
+- ฝัง [Univer](https://univer.ai) ผ่าน CDN (unpkg UMD) แบบ **lazy-load** — โหลดเฉพาะเมื่อกดเข้า tab ครั้งแรก (~2 MB ครั้งเดียว, ไม่กระทบ initial load ของ user ที่ไม่ใช้)
+- Auto-populate จากข้อมูลที่ filter ใน Table view ปัจจุบัน
+- Features: Core sheet + formulas (`=SUM`, `=AVERAGE`, ฯลฯ) + Filter + Sort + Find & Replace + Conditional Formatting (ผ่าน `@univerjs/preset-sheets-*`)
+- **Persistence ที่เครื่อง user** — Save → ดาวน์โหลด `.univer.json` / Open → file picker (ไม่ใช้ backend storage)
+- **Save as XLSX** — บันทึกเป็น .xlsx ผ่าน SheetJS (สูตรกลายเป็นค่า — lossy; ใช้ Save .univer.json ถ้าต้องกลับมาแก้)
+- Dirty tracking + `beforeunload` warning เตือนก่อนออกถ้ายังไม่ save
+- Performance gate ที่ 50k rows — confirm dialog ก่อน mount dataset ใหญ่
+- **Theme-immune (always-light)** — popovers/filter dropdowns ของ Univer ไม่ถูก dark theme บัง
 
 ### Export
 - ปุ่ม Export Excel ดาวน์โหลดข้อมูลที่กรองแล้วเป็นไฟล์ .xlsx
@@ -174,3 +183,8 @@ docker run -p 5000:5000 --env-file .env se-report
 - [x] Parallel chunk fetching (ThreadPoolExecutor 4 workers + queue.Queue + threading.Lock double-check login)
 - [x] ขยาย `PAGE_LIMIT` 200 → 5000 และเพิ่ม `CHUNK_DAYS=30`, `HTTPAdapter pool_maxsize`
 - [x] Virtual scrolling สำหรับ table view (persistent spacer anchors) — รองรับ 100k+ records, memory peak < 500 MB
+- [x] Per-user iSurvey login (เลิกใช้ shared service account; credentials เก็บใน-memory ต่อ user)
+- [x] Collapse Dashboard เป็น single full-viewport treemap (พนักงานตรวจสอบ / ผู้ปิดงาน) — labels scale ตาม cell dimensions
+- [x] Spreadsheet view ด้วย FortuneSheet (lazy-load + .fsheet.json persistence)
+- [x] Migrate Spreadsheet engine จาก FortuneSheet → **Univer** — รองรับ filter / sort / find-replace / conditional formatting, theme-immune popovers, ไฟล์ persistence เปลี่ยนเป็น .univer.json
+- [x] Drop pivot column-sort feature (PivotTable.js sort เป็น global per-axis ไม่ใช่ per-column ทำให้สับสนกับ user)

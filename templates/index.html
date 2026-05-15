@@ -231,13 +231,12 @@
         }
         .filter-dropdown .fd-cancel:hover { background: #334155; color: #e2e8f0; }
 
-        /* Spreadsheet (FortuneSheet) — theme-immune.
-           FortuneSheet's internal text (filter dropdowns, popovers,
-           context menus) inherits `color` from ancestors. When the app
-           runs in dark theme, body's light text color bled through
-           making filter values nearly invisible. The whole spreadsheet
-           subtree is forced to an always-light palette so it stays
-           readable regardless of the dark/light toggle. */
+        /* Spreadsheet (Univer) — theme-immune.
+           Univer's filter dropdowns and popovers inherit `color` from
+           ancestors. When the app runs in dark theme, body's light text
+           color can bleed through making popovers nearly invisible. The
+           whole spreadsheet subtree is forced to an always-light palette
+           so it stays readable regardless of the dark/light toggle. */
         #spreadsheetView {
             display: none;
             flex: 1; min-height: 0;
@@ -272,7 +271,7 @@
         #sheetStatus {
             margin-left: auto; color: #64748b; font-size: 12px;
         }
-        #fortuneSheetHost {
+        #univerHost {
             flex: 1; min-height: 300px;
             position: relative;
             background: #fff;
@@ -280,20 +279,18 @@
             overflow: hidden;
             color: #1e293b;
         }
-        /* FortuneSheet portals filter dropdowns / context menus to body
-           in some builds, escaping the #spreadsheetView subtree. These
-           explicit overrides ensure readability regardless of where the
-           popovers render. */
-        .luckysheet-filter-options,
-        .luckysheet-filter-byvalue-item,
-        .luckysheet-cols-menu,
-        .luckysheet-cols-menuitem,
-        .luckysheet-mousedown-cancel,
-        .luckysheet-rightclick-menu,
-        .fortune-context-menu,
-        .fortune-popover {
-            color: #1e293b !important;
-            background: #fff !important;
+        #univerMount { width: 100%; height: 100%; }
+        /* Univer portals popovers / menus / dialogs to body via the
+           univer-root class. Force a light palette there so the app's
+           dark theme doesn't bleed into them. */
+        .univer-root,
+        .univer-root *,
+        .univer-portal,
+        .univer-portal * {
+            color: #1e293b;
+        }
+        .univer-portal {
+            background: transparent;
         }
         #sheetLoadingOverlay {
             display: none;
@@ -305,7 +302,7 @@
             gap: 12px;
         }
         #sheetLoadingOverlay.visible { display: flex; }
-        /* While the FortuneSheet assets are loading on first entry, the
+        /* While the Univer assets are loading on first entry, the
            empty-state placeholder ("ยังไม่มีข้อมูล — กรุณา Fetch ก่อน...")
            sits behind a 90%-opaque overlay and bleeds through the gap
            between the spinner and the overlay's loading text. Hide the
@@ -918,16 +915,16 @@
             <div id="spreadsheetView">
                 <div id="sheetToolbar">
                     <button type="button" id="sheetNewBtn" class="sheet-btn" title="โหลดข้อมูลปัจจุบัน (จาก lastRecords) เข้า workbook ใหม่">New from data</button>
-                    <button type="button" id="sheetOpenBtn" class="sheet-btn" title="เปิดไฟล์ .fsheet.json ที่บันทึกไว้">Open</button>
-                    <button type="button" id="sheetSaveBtn" class="sheet-btn sheet-btn-primary" title="บันทึก workbook เป็นไฟล์ .fsheet.json (เก็บสูตรครบ)">Save</button>
+                    <button type="button" id="sheetOpenBtn" class="sheet-btn" title="เปิดไฟล์ .univer.json ที่บันทึกไว้">Open</button>
+                    <button type="button" id="sheetSaveBtn" class="sheet-btn sheet-btn-primary" title="บันทึก workbook เป็นไฟล์ .univer.json (เก็บสูตรครบ)">Save</button>
                     <button type="button" id="sheetSaveXlsxBtn" class="sheet-btn" title="บันทึกเป็น .xlsx (สูตรกลายเป็นค่า)">Save as XLSX</button>
                     <span id="sheetDirtyIndicator" title="มีการแก้ไขที่ยังไม่ได้บันทึก">● unsaved</span>
                     <span id="sheetStatus"></span>
                 </div>
-                <div id="fortuneSheetHost">
+                <div id="univerHost">
                     <div id="sheetLoadingOverlay">
                         <div class="sheet-spinner"></div>
-                        <div class="sheet-loading-text">กำลังโหลด FortuneSheet...</div>
+                        <div class="sheet-loading-text">กำลังโหลด Univer...</div>
                     </div>
                     <div id="sheetEmptyMessage"><div class="sheet-empty-text">ยังไม่มีข้อมูล — กรุณา Fetch ก่อน แล้วกลับมาที่นี่<br>หรือกดปุ่ม <b>Open</b> เพื่อโหลด workbook ที่บันทึกไว้</div></div>
                 </div>
@@ -2206,35 +2203,48 @@
             XLSX.writeFile(wb, `SE_Report_${rt}_${df}_${dt}.xlsx`);
         });
 
-        // ========== SPREADSHEET VIEW (FortuneSheet) ==========
-        // FortuneSheet is React-based; @fortune-sheet/react ships no UMD,
-        // so we lazy-load React + ReactDOM + the component via esm.sh on
-        // first tab entry. All persistence is client-side (Blob download /
-        // FileReader open) — no backend involvement.
-        const FS_PIN = '1.0.4';
-        const FS_DEPS = 'react@18.3.1,react-dom@18.3.1';
-        const FS_URLS = {
-            css:     `https://esm.sh/@fortune-sheet/react@${FS_PIN}/dist/index.css`,
-            react:   `https://esm.sh/react@18.3.1`,
-            reactDom:`https://esm.sh/react-dom@18.3.1/client`,
-            sheet:   `https://esm.sh/@fortune-sheet/react@${FS_PIN}?deps=${FS_DEPS}`,
+        // ========== SPREADSHEET VIEW (Univer) ==========
+        // Univer (https://univer.ai) ships UMD bundles via unpkg, so we
+        // lazy-load all required scripts on first tab entry. All
+        // persistence is client-side: Save → JSON Blob download,
+        // Open → file picker + FileReader. No backend involvement.
+        const UNIVER_BASE = 'https://unpkg.com';
+        const UNIVER_URLS = {
+            // Base browser deps (must load before Univer scripts)
+            react:        `${UNIVER_BASE}/react@18.3.1/umd/react.production.min.js`,
+            reactDom:     `${UNIVER_BASE}/react-dom@18.3.1/umd/react-dom.production.min.js`,
+            rxjs:         `${UNIVER_BASE}/rxjs/dist/bundles/rxjs.umd.min.js`,
+            // Univer presets/core (UMD)
+            presets:      `${UNIVER_BASE}/@univerjs/presets/lib/umd/index.js`,
+            core:         `${UNIVER_BASE}/@univerjs/preset-sheets-core/lib/umd/index.js`,
+            coreLocale:   `${UNIVER_BASE}/@univerjs/preset-sheets-core/lib/umd/locales/en-US.js`,
+            filter:       `${UNIVER_BASE}/@univerjs/preset-sheets-filter/lib/umd/index.js`,
+            filterLocale: `${UNIVER_BASE}/@univerjs/preset-sheets-filter/lib/umd/locales/en-US.js`,
+            sort:         `${UNIVER_BASE}/@univerjs/preset-sheets-sort/lib/umd/index.js`,
+            sortLocale:   `${UNIVER_BASE}/@univerjs/preset-sheets-sort/lib/umd/locales/en-US.js`,
+            findReplace:  `${UNIVER_BASE}/@univerjs/preset-sheets-find-replace/lib/umd/index.js`,
+            findReplaceLocale: `${UNIVER_BASE}/@univerjs/preset-sheets-find-replace/lib/umd/locales/en-US.js`,
+            cf:           `${UNIVER_BASE}/@univerjs/preset-sheets-conditional-formatting/lib/umd/index.js`,
+            cfLocale:     `${UNIVER_BASE}/@univerjs/preset-sheets-conditional-formatting/lib/umd/locales/en-US.js`,
+            // CSS for each preset (loaded in parallel as <link>)
+            cssCore:      `${UNIVER_BASE}/@univerjs/preset-sheets-core/lib/index.css`,
+            cssFilter:    `${UNIVER_BASE}/@univerjs/preset-sheets-filter/lib/index.css`,
+            cssSort:      `${UNIVER_BASE}/@univerjs/preset-sheets-sort/lib/index.css`,
+            cssFindReplace: `${UNIVER_BASE}/@univerjs/preset-sheets-find-replace/lib/index.css`,
+            cssCf:        `${UNIVER_BASE}/@univerjs/preset-sheets-conditional-formatting/lib/index.css`,
         };
         const SHEET_TEXT_KEYS = new Set(['claim_no', 'notify_no', 'survey_no', 'preNotifyNo', 'policy_no', 'plate_no']);
         const SHEET_PERF_THRESHOLD = 50000;
 
         const sheetState = {
-            loaded: false,
-            loadingPromise: null,
-            mounted: false,
-            dirty: false,
-            currentData: null,
-            root: null,
-            React: null,
-            ReactDOM: null,
-            Workbook: null,
+            loaded: false,           // CDN assets resolved
+            loadingPromise: null,    // in-flight load promise (single-flight)
+            mounted: false,          // Univer workbook created
+            dirty: false,            // edits since last save
+            currentData: null,       // last known workbook snapshot (IWorkbookData)
+            univer: null,            // root Univer instance
+            univerAPI: null,         // Facade API
             sourceLabel: '',
-            // Stashed by buildWorkbookData; consumers can read the current
-            // data extent without poking at the (frozen) workbook tree.
             recordCount: 0,
             colCount: 0,
         };
@@ -2275,30 +2285,64 @@
             if (visible) setSheetEmptyText(SHEET_EMPTY_DEFAULT_HTML);
         }
 
-        function loadFortuneSheetAssets() {
+        function _loadUniverScript(src) {
+            return new Promise((resolve, reject) => {
+                if (document.querySelector(`script[src="${src}"]`)) { resolve(); return; }
+                const s = document.createElement('script');
+                s.src = src;
+                s.onload = () => resolve();
+                s.onerror = () => reject(new Error('Failed to load script: ' + src));
+                document.head.appendChild(s);
+            });
+        }
+        function _loadUniverCss(src) {
+            if (document.querySelector(`link[href="${src}"]`)) return;
+            const link = document.createElement('link');
+            link.rel = 'stylesheet';
+            link.href = src;
+            document.head.appendChild(link);
+        }
+
+        function loadUniverAssets() {
             if (sheetState.loaded) return Promise.resolve();
             if (sheetState.loadingPromise) return sheetState.loadingPromise;
 
             sheetState.loadingPromise = (async () => {
-                // Inject CSS once
-                if (!document.querySelector('link[data-fortune-sheet]')) {
-                    const link = document.createElement('link');
-                    link.rel = 'stylesheet';
-                    link.href = FS_URLS.css;
-                    link.dataset.fortuneSheet = '1';
-                    document.head.appendChild(link);
+                // CSS in parallel — non-blocking for layout
+                [UNIVER_URLS.cssCore, UNIVER_URLS.cssFilter, UNIVER_URLS.cssSort,
+                 UNIVER_URLS.cssFindReplace, UNIVER_URLS.cssCf].forEach(_loadUniverCss);
+
+                // Base deps must load before Univer UMDs (sequential to be safe)
+                await _loadUniverScript(UNIVER_URLS.react);
+                await _loadUniverScript(UNIVER_URLS.reactDom);
+                await _loadUniverScript(UNIVER_URLS.rxjs);
+
+                // Univer core + presets (presets first — defines UniverPresets/UniverCore)
+                await _loadUniverScript(UNIVER_URLS.presets);
+                // Core sheet preset + its locale
+                await _loadUniverScript(UNIVER_URLS.core);
+                await _loadUniverScript(UNIVER_URLS.coreLocale);
+                // Optional feature presets — load best-effort; if any fail to
+                // load we still proceed with whatever's available.
+                const optional = [
+                    [UNIVER_URLS.filter,       UNIVER_URLS.filterLocale],
+                    [UNIVER_URLS.sort,         UNIVER_URLS.sortLocale],
+                    [UNIVER_URLS.findReplace,  UNIVER_URLS.findReplaceLocale],
+                    [UNIVER_URLS.cf,           UNIVER_URLS.cfLocale],
+                ];
+                for (const [js, loc] of optional) {
+                    try {
+                        await _loadUniverScript(js);
+                        await _loadUniverScript(loc);
+                    } catch (e) {
+                        console.warn('Optional Univer preset failed to load:', js, e);
+                    }
                 }
-                // Dynamic ES module imports (esm.sh bundles deps for browser)
-                const [reactMod, reactDomMod, fsMod] = await Promise.all([
-                    import(FS_URLS.react),
-                    import(FS_URLS.reactDom),
-                    import(FS_URLS.sheet),
-                ]);
-                sheetState.React = reactMod.default || reactMod;
-                sheetState.ReactDOM = reactDomMod.default || reactDomMod;
-                sheetState.Workbook = fsMod.Workbook || (fsMod.default && fsMod.default.Workbook);
-                if (!sheetState.Workbook) {
-                    throw new Error('FortuneSheet Workbook export not found');
+
+                if (typeof UniverPresets === 'undefined' ||
+                    typeof UniverCore === 'undefined' ||
+                    typeof UniverPresetSheetsCore === 'undefined') {
+                    throw new Error('Univer globals not found after script load');
                 }
                 sheetState.loaded = true;
             })();
@@ -2309,31 +2353,17 @@
             });
         }
 
-        function recordsToCelldata(records, columns) {
-            // FortuneSheet celldata shape: [{r, c, v: {v, m, ct: {fa, t}}}]
-            // Match the Excel export's text-format behavior for claim_no etc.
-            const cells = [];
-            // Header row
-            columns.forEach((col, c) => {
-                cells.push({
-                    r: 0, c,
-                    v: {
-                        v: col.label, m: col.label,
-                        ct: { fa: 'General', t: 'g' },
-                        bl: 1,
-                        bg: '#f1f5f9',
-                        fc: '#1e293b',
-                    },
-                });
-            });
-            // First pass — pick one type per column so every cell in a column
-            // is uniform. FortuneSheet's filter dropdown groups unique values
-            // by (value, type); when the same column mixes numbers (t:'n')
-            // and strings (t:'s'), Sort interactions can leave the unique-
-            // value computation seeing a partitioned set and rendering an
-            // empty values list. A column is numeric only if *every* non-
-            // blank record parses as a finite number. Text columns
-            // (claim_no etc.) are always string.
+        // Cell value type tags used by Univer's IWorkbookData.cellData:
+        //   1 = STRING, 2 = NUMBER. (Others exist for booleans/forces, not used here.)
+        const UNIVER_T_STRING = 1;
+        const UNIVER_T_NUMBER = 2;
+
+        function recordsToUniverWorkbook(records, columns, name) {
+            // Decide per-column type up front so a column is uniform — Univer's
+            // built-in filter UI groups unique values by raw value, and mixed
+            // types in one column can produce odd ordering. A column is
+            // numeric only if *every* non-blank record parses as a finite
+            // number; text columns (claim_no etc.) are always string.
             const colTypes = columns.map((col) => {
                 if (SHEET_TEXT_KEYS.has(col.key)) return 's';
                 let allNumeric = true;
@@ -2348,105 +2378,152 @@
                 }
                 return (sawValue && allNumeric) ? 'n' : 's';
             });
+
+            // cellData shape: { [rowIdx]: { [colIdx]: { v, t, s? } } }
+            // Sparse — only emit non-empty cells.
+            const cellData = { 0: {} };
+            // Header row (row 0)
+            columns.forEach((col, c) => {
+                cellData[0][c] = {
+                    v: col.label,
+                    t: UNIVER_T_STRING,
+                    s: { bl: 1, bg: { rgb: '#f1f5f9' }, cl: { rgb: '#1e293b' } },
+                };
+            });
             // Data rows
             for (let i = 0; i < records.length; i++) {
                 const rec = records[i];
                 const r = i + 1;
+                const row = {};
+                let touched = false;
                 columns.forEach((col, c) => {
                     const raw = rec[col.key];
                     if (raw === null || raw === undefined || raw === '') return;
                     const str = String(raw);
                     if (colTypes[c] === 'n') {
-                        cells.push({ r, c, v: { v: Number(raw), m: str, ct: { fa: 'General', t: 'n' } } });
+                        row[c] = { v: Number(raw), t: UNIVER_T_NUMBER };
                     } else {
-                        const fa = SHEET_TEXT_KEYS.has(col.key) ? '@' : 'General';
-                        cells.push({ r, c, v: { v: str, m: str, ct: { fa, t: 's' } } });
+                        row[c] = { v: str, t: UNIVER_T_STRING };
                     }
+                    touched = true;
                 });
+                if (touched) cellData[r] = row;
             }
-            return cells;
-        }
 
-        function buildWorkbookData(records, columns) {
-            const celldata = recordsToCelldata(records, columns);
             sheetState.recordCount = records.length;
             sheetState.colCount = columns.length;
-            const lastRow = records.length; // header is row 0
-            const lastCol = columns.length - 1;
-            return [{
-                name: 'Sheet1',
-                celldata,
-                order: 0,
-                row: Math.max(records.length + 5, 100),
-                column: Math.max(columns.length + 3, 26),
-                config: {},
-                status: 1,
-                // Pre-arm the active selection to cover the full data
-                // extent. When user clicks Sort and filter > Create filter
-                // in FortuneSheet's toolbar, the filter range is built
-                // from this selection — so we bypass FortuneSheet's
-                // auto-detect (which sets row/column bounds to `null` on
-                // unselected data and corrupts the dropdown's unique-value
-                // computation).
-                //
-                // We can't fix this after the fact via onChange because
-                // FortuneSheet wraps every sheet object in Object.freeze
-                // before delivering it to the callback — mutation is a
-                // silent no-op. Seeding the right selection at mount is
-                // the only place we can influence the filter range
-                // without unmount/remount.
-                luckysheet_select_save: [{
-                    row: [0, lastRow],
-                    column: [0, lastCol],
-                    row_focus: 0,
-                    column_focus: 0,
-                }],
-            }];
+
+            const sheetId = 'sheet-' + Date.now();
+            return {
+                id: 'wb-' + Date.now(),
+                name: name || 'SE Report Workbook',
+                appVersion: '0.10.0',
+                locale: 'enUS',
+                sheetOrder: [sheetId],
+                sheets: {
+                    [sheetId]: {
+                        id: sheetId,
+                        name: 'Sheet1',
+                        rowCount: Math.max(records.length + 50, 200),
+                        columnCount: Math.max(columns.length + 5, 26),
+                        cellData,
+                        mergeData: [],
+                        freeze: { startRow: 1, startColumn: 0, ySplit: 1, xSplit: 0 },
+                        defaultColumnWidth: 110,
+                        defaultRowHeight: 24,
+                    },
+                },
+                styles: {},
+                resources: [],
+            };
         }
 
-        function mountFortuneSheet(workbookData, label) {
-            const host = document.getElementById('fortuneSheetHost');
+        function mountUniver(workbookData, label) {
+            const host = document.getElementById('univerHost');
             setSheetEmptyVisible(false);
 
-            if (sheetState.root) {
-                try { sheetState.root.unmount(); } catch {}
-                sheetState.root = null;
+            // Dispose previous Univer instance, if any. Easier than swapping
+            // workbook in-place since createWorkbook in Univer can leave the
+            // prior unit around.
+            if (sheetState.univer) {
+                try { sheetState.univer.dispose(); } catch (e) { console.warn(e); }
+                sheetState.univer = null;
+                sheetState.univerAPI = null;
                 sheetState.mounted = false;
             }
-
-            // Clear any leftover children (other than persistent overlay/empty msg)
+            // Clear any leftover mount children (preserve overlay/empty msg)
             Array.from(host.childNodes).forEach(node => {
                 if (node.id !== 'sheetLoadingOverlay' && node.id !== 'sheetEmptyMessage') {
                     host.removeChild(node);
                 }
             });
             const mountDiv = document.createElement('div');
-            mountDiv.style.width = '100%';
-            mountDiv.style.height = '100%';
+            mountDiv.id = 'univerMount';
             host.appendChild(mountDiv);
 
-            const root = sheetState.ReactDOM.createRoot(mountDiv);
-            // FortuneSheet may dispatch onChange during initial render/setup.
-            // Suppress dirty marking for the first 500ms to avoid spurious
-            // "unsaved" indicator on a freshly-mounted workbook.
-            const mountedAt = Date.now();
-            const handleChange = (data) => {
-                sheetState.currentData = data;
-                if (Date.now() - mountedAt < 500) return;
-                if (sheetState.mounted) setSheetDirty(true);
-            };
-            const el = sheetState.React.createElement(sheetState.Workbook, {
-                data: workbookData,
-                onChange: handleChange,
-            });
-            root.render(el);
+            const { createUniver } = UniverPresets;
+            const { LocaleType, mergeLocales } = UniverCore;
 
-            sheetState.root = root;
+            const presets = [
+                UniverPresetSheetsCore.UniverSheetsCorePreset({ container: 'univerMount' }),
+            ];
+            const localeBits = [
+                typeof UniverPresetSheetsCoreEnUS !== 'undefined' ? UniverPresetSheetsCoreEnUS : {},
+            ];
+
+            // Add optional presets that were loaded successfully. Naming
+            // follows Univer's convention: package @univerjs/preset-sheets-X
+            // exposes window.UniverPresetSheetsX and UniverPresetSheetsXEnUS.
+            const opt = [
+                ['UniverPresetSheetsFilter',              'UniverSheetsFilterPreset',              'UniverPresetSheetsFilterEnUS'],
+                ['UniverPresetSheetsSort',                'UniverSheetsSortPreset',                'UniverPresetSheetsSortEnUS'],
+                ['UniverPresetSheetsFindReplace',         'UniverSheetsFindReplacePreset',         'UniverPresetSheetsFindReplaceEnUS'],
+                ['UniverPresetSheetsConditionalFormatting','UniverSheetsConditionalFormattingPreset','UniverPresetSheetsConditionalFormattingEnUS'],
+            ];
+            for (const [ns, preset, locale] of opt) {
+                const nsObj = window[ns];
+                if (nsObj && typeof nsObj[preset] === 'function') {
+                    try { presets.push(nsObj[preset]()); } catch (e) {
+                        console.warn(`Univer preset ${preset} init failed`, e);
+                    }
+                }
+                if (window[locale]) localeBits.push(window[locale]);
+            }
+
+            const { univer, univerAPI } = createUniver({
+                locale: LocaleType.EN_US,
+                locales: { [LocaleType.EN_US]: mergeLocales.apply(null, localeBits) },
+                presets,
+            });
+
+            univerAPI.createWorkbook(workbookData);
+
+            sheetState.univer = univer;
+            sheetState.univerAPI = univerAPI;
             sheetState.currentData = workbookData;
             sheetState.sourceLabel = label || '';
             sheetState.mounted = true;
             setSheetDirty(false);
             setSheetStatus(label || '');
+
+            // Attach a dirty-tracking listener. Univer's command system fires
+            // for every mutation (type === 2 in the CommandType enum). We
+            // suppress dirty marking for the first 500ms because the initial
+            // createWorkbook itself dispatches commands.
+            const mountedAt = Date.now();
+            try {
+                if (typeof univerAPI.onCommandExecuted === 'function') {
+                    univerAPI.onCommandExecuted((cmd) => {
+                        if (Date.now() - mountedAt < 500) return;
+                        // type === 2 is "Mutation" in Univer's CommandType enum
+                        if (cmd && (cmd.type === 2 || cmd.type === 'mutation')) {
+                            if (!sheetState.dirty) setSheetDirty(true);
+                        }
+                    });
+                }
+            } catch (e) {
+                console.warn('Failed to attach Univer change listener:', e);
+            }
         }
 
         async function enterSpreadsheetTab() {
@@ -2457,11 +2534,11 @@
                 setSheetEmptyVisible(true);
                 setSheetStatus('');
                 try {
-                    setSheetOverlay(true, 'กำลังโหลด FortuneSheet (เตรียมไว้สำหรับ Open)...');
-                    await loadFortuneSheetAssets();
+                    setSheetOverlay(true, 'กำลังโหลด Univer (เตรียมไว้สำหรับ Open)...');
+                    await loadUniverAssets();
                 } catch (e) {
-                    console.error('FortuneSheet preload failed:', e);
-                    setSheetStatus('โหลด FortuneSheet ไม่สำเร็จ — เช็คเน็ต/esm.sh');
+                    console.error('Univer preload failed:', e);
+                    setSheetStatus('โหลด Univer ไม่สำเร็จ — เช็คเน็ต/unpkg');
                 } finally {
                     setSheetOverlay(false);
                 }
@@ -2480,7 +2557,6 @@
             if (filtered.length > SHEET_PERF_THRESHOLD) {
                 const ok = confirm(
                     `Dataset มี ${filtered.length.toLocaleString()} rows — ` +
-                    `FortuneSheet ไม่ได้ออกแบบมาสำหรับ row จำนวนมาก ` +
                     `อาจใช้เวลาโหลดและทำงานช้า\n\nต้องการดำเนินการต่อ?`
                 );
                 if (!ok) {
@@ -2490,20 +2566,20 @@
                 }
             }
 
-            setSheetOverlay(true, 'กำลังโหลด FortuneSheet...');
+            setSheetOverlay(true, 'กำลังโหลด Univer...');
             try {
-                await loadFortuneSheetAssets();
+                await loadUniverAssets();
                 setSheetOverlay(true, `กำลังสร้าง workbook (${filtered.length.toLocaleString()} rows × ${selected.length} cols)...`);
                 // Yield so the spinner paints before the synchronous mount work
                 await new Promise(r => setTimeout(r, 30));
-                mountFortuneSheet(
-                    buildWorkbookData(filtered, selected),
+                mountUniver(
+                    recordsToUniverWorkbook(filtered, selected),
                     `จากข้อมูล: ${filtered.length.toLocaleString()} rows × ${selected.length} cols`
                 );
             } catch (e) {
-                console.error('FortuneSheet mount failed:', e);
+                console.error('Univer mount failed:', e);
                 setSheetEmptyVisible(true);
-                setSheetEmptyText(`โหลด FortuneSheet ล้มเหลว:<br><code>${(e && e.message) || e}</code><br><br>ตรวจสอบ network / esm.sh แล้วลองสลับ tab อีกครั้ง`);
+                setSheetEmptyText(`โหลด Univer ล้มเหลว:<br><code>${(e && e.message) || e}</code><br><br>ตรวจสอบ network / unpkg แล้วลองสลับ tab อีกครั้ง`);
             } finally {
                 setSheetOverlay(false);
             }
@@ -2526,12 +2602,11 @@
             }
             try {
                 setSheetOverlay(true, 'กำลังสร้าง workbook ใหม่...');
-                await loadFortuneSheetAssets();
+                await loadUniverAssets();
                 await new Promise(r => setTimeout(r, 30));
-                // Force remount (cleared by mountFortuneSheet)
                 sheetState.mounted = false;
-                mountFortuneSheet(
-                    buildWorkbookData(filtered, selected),
+                mountUniver(
+                    recordsToUniverWorkbook(filtered, selected),
                     `จากข้อมูล: ${filtered.length.toLocaleString()} rows × ${selected.length} cols`
                 );
             } catch (e) {
@@ -2548,87 +2623,37 @@
             return `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}_${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
         }
 
-        // FortuneSheet's onChange emits its internal `data` (2D matrix)
-        // form, which it accepts on input but FortuneSheet's mount logic
-        // can render incorrectly if `celldata` is missing. Save/Open both
-        // need a sparse `celldata` array to round-trip reliably, and the
-        // XLSX exporter reads `celldata` too. This helper synthesizes a
-        // `celldata` array from whichever shape the sheet currently holds.
-        function extractCelldata(sheet) {
-            if (!sheet) return [];
-            if (Array.isArray(sheet.celldata) && sheet.celldata.length > 0) {
-                return sheet.celldata;
-            }
-            const matrix = sheet.data;
-            if (!Array.isArray(matrix)) return [];
-            const out = [];
-            for (let r = 0; r < matrix.length; r++) {
-                const row = matrix[r];
-                if (!Array.isArray(row)) continue;
-                for (let c = 0; c < row.length; c++) {
-                    const cell = row[c];
-                    if (cell == null) continue;
-                    // The 2D matrix stores either the `v` object directly
-                    // (FortuneSheet's normalized form) or null for empty.
-                    if (typeof cell === 'object') {
-                        // Skip cells that are truly empty (no v, no m)
-                        if (cell.v === undefined && cell.m === undefined &&
-                            cell.ct === undefined && cell.f === undefined) {
-                            continue;
-                        }
-                        out.push({ r, c, v: cell });
-                    } else if (cell !== '') {
-                        // Primitive value (rare): wrap it
-                        out.push({ r, c, v: { v: cell, m: String(cell) } });
+        // Pull the latest workbook snapshot from Univer's facade API.
+        // Falls back to sheetState.currentData if the API is unavailable
+        // (e.g. before first mount).
+        function getCurrentUniverSnapshot() {
+            if (sheetState.univerAPI) {
+                try {
+                    const fWb = sheetState.univerAPI.getActiveWorkbook();
+                    if (fWb && typeof fWb.getSnapshot === 'function') {
+                        return fWb.getSnapshot();
                     }
+                } catch (e) {
+                    console.warn('getSnapshot failed:', e);
                 }
             }
-            return out;
-        }
-
-        // Return a deep-ish clone of `data` where every sheet has a
-        // populated `celldata` array. Used for save (so files round-trip)
-        // and for open (so FortuneSheet renders from any saved form).
-        function normalizeWorkbook(data) {
-            if (!Array.isArray(data)) return data;
-            return data.map(sheet => {
-                if (!sheet || typeof sheet !== 'object') return sheet;
-                const celldata = extractCelldata(sheet);
-                let maxR = sheet.row || 0;
-                let maxC = sheet.column || 0;
-                celldata.forEach(c => {
-                    if (c.r + 1 > maxR) maxR = c.r + 1;
-                    if (c.c + 1 > maxC) maxC = c.c + 1;
-                });
-                return {
-                    ...sheet,
-                    celldata,
-                    row: Math.max(maxR + 5, sheet.row || 0, 100),
-                    column: Math.max(maxC + 3, sheet.column || 0, 26),
-                };
-            });
+            return sheetState.currentData;
         }
 
         function saveSheetJson() {
-            const data = sheetState.currentData;
-            if (!data) {
+            const snapshot = getCurrentUniverSnapshot();
+            if (!snapshot || !snapshot.sheets) {
                 alert('ยังไม่มี workbook ให้บันทึก');
                 return;
             }
             try {
-                const normalized = normalizeWorkbook(data);
-                const totalCells = normalized.reduce(
-                    (n, s) => n + (s.celldata ? s.celldata.length : 0), 0
-                );
-                if (totalCells === 0) {
-                    if (!confirm('Workbook ดูเหมือนไม่มีข้อมูล — บันทึกต่อไหม?')) return;
-                }
-                const json = JSON.stringify(normalized);
+                sheetState.currentData = snapshot;
+                const json = JSON.stringify(snapshot);
                 const blob = new Blob([json], { type: 'application/json' });
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.href = url;
-                a.download = `SE_Report_workbook_${tsForFilename()}.fsheet.json`;
+                a.download = `SE_Report_workbook_${tsForFilename()}.univer.json`;
                 document.body.appendChild(a);
                 a.click();
                 document.body.removeChild(a);
@@ -2653,17 +2678,14 @@
                 if (!file) return;
                 try {
                     setSheetOverlay(true, `กำลังอ่านไฟล์ ${file.name}...`);
-                    await loadFortuneSheetAssets();
+                    await loadUniverAssets();
                     const text = await file.text();
                     const data = JSON.parse(text);
-                    if (!Array.isArray(data) || data.length === 0) {
-                        throw new Error('รูปแบบไฟล์ไม่ถูกต้อง — คาดว่าเป็น array ของ sheets');
+                    if (!data || typeof data !== 'object' || !data.sheets) {
+                        throw new Error('รูปแบบไฟล์ไม่ถูกต้อง — คาดว่าเป็น Univer workbook JSON (.univer.json)');
                     }
-                    // Normalize legacy / internal-format saves so FortuneSheet
-                    // mounts reliably regardless of how the file was produced.
-                    const normalized = normalizeWorkbook(data);
                     sheetState.mounted = false;
-                    mountFortuneSheet(normalized, `เปิดจากไฟล์: ${file.name}`);
+                    mountUniver(data, `เปิดจากไฟล์: ${file.name}`);
                 } catch (e) {
                     console.error(e);
                     alert('เปิดไฟล์ไม่สำเร็จ: ' + (e && e.message || e));
@@ -2676,35 +2698,42 @@
         }
 
         function saveSheetXlsx() {
-            const data = sheetState.currentData;
-            if (!data || !data[0]) {
+            const snapshot = getCurrentUniverSnapshot();
+            if (!snapshot || !snapshot.sheets) {
                 alert('ยังไม่มี workbook ให้บันทึก');
                 return;
             }
-            const sheet = data[0];
-            // Handle both celldata (sparse, as-built / after Open) and
-            // FortuneSheet's internal 2D `data` matrix (after onChange).
-            const cells = extractCelldata(sheet);
-            if (cells.length === 0) {
-                alert('Sheet ว่างเปล่า');
-                return;
-            }
             try {
-                let maxR = 0, maxC = 0;
-                cells.forEach(c => {
-                    if (c.r > maxR) maxR = c.r;
-                    if (c.c > maxC) maxC = c.c;
+                const sheetId = (snapshot.sheetOrder && snapshot.sheetOrder[0]) ||
+                                Object.keys(snapshot.sheets)[0];
+                const sheet = snapshot.sheets[sheetId];
+                const cellData = (sheet && sheet.cellData) || {};
+                let maxR = -1, maxC = -1;
+                const rowKeys = Object.keys(cellData);
+                rowKeys.forEach(r => {
+                    const ri = +r;
+                    if (ri > maxR) maxR = ri;
+                    Object.keys(cellData[r]).forEach(c => {
+                        const ci = +c;
+                        if (ci > maxC) maxC = ci;
+                    });
                 });
+                if (maxR < 0 || maxC < 0) {
+                    alert('Sheet ว่างเปล่า');
+                    return;
+                }
                 const aoa = [];
                 for (let r = 0; r <= maxR; r++) {
                     aoa.push(new Array(maxC + 1).fill(''));
                 }
-                cells.forEach(c => {
-                    const v = c.v;
-                    if (!v) return;
-                    // Prefer displayed/computed value (m); fall back to raw (v)
-                    const val = (v.m !== undefined && v.m !== null) ? v.m : v.v;
-                    aoa[c.r][c.c] = (val === null || val === undefined) ? '' : val;
+                rowKeys.forEach(r => {
+                    const ri = +r;
+                    Object.keys(cellData[r]).forEach(c => {
+                        const ci = +c;
+                        const cell = cellData[r][c];
+                        const val = cell && (cell.v != null ? cell.v : '');
+                        aoa[ri][ci] = (val === null || val === undefined) ? '' : val;
+                    });
                 });
                 const ws = XLSX.utils.aoa_to_sheet(aoa);
                 const wb = XLSX.utils.book_new();
@@ -2804,9 +2833,9 @@
                                 // align/justify-center from .toolbar-controls
                                 // button so the SVG icon stays centered.
                                 exportBtn.style.display = 'inline-flex';
-                                // Invalidate the FortuneSheet workbook so the
-                                // next time the user enters the Spreadsheet
-                                // tab (or if they're already on it) the view
+                                // Invalidate the Univer workbook so the next
+                                // time the user enters the Spreadsheet tab
+                                // (or if they're already on it) the view
                                 // remounts against the freshly-fetched data
                                 // instead of preserving the previous Fetch's
                                 // rows. enterSpreadsheetTab's early-return
