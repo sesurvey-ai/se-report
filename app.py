@@ -19,6 +19,10 @@ from urllib3.util.retry import Retry
 
 load_dotenv()
 
+# Bumped when releasing user-visible changes; displayed in the login footer
+# so admins can confirm which build is live without checking the server.
+APP_VERSION = '1.1.0'
+
 # Tuning constants for parallel chunk fetching.
 # iSurvey rate-limits concurrent connections; 8 workers failed in prior tests.
 CHUNK_DAYS = 30
@@ -351,6 +355,12 @@ app.secret_key = os.getenv('SECRET_KEY') or secrets.token_urlsafe(32)
 # marked permanent on login and refreshed (slid) on each request through
 # the require_login decorator, so this is effectively an inactivity timer.
 app.permanent_session_lifetime = timedelta(hours=8)
+
+
+@app.context_processor
+def _inject_app_version():
+    """Expose APP_VERSION to every Jinja template (used by login footer)."""
+    return {'app_version': APP_VERSION}
 
 
 # ---------------------------------------------------------------------------
