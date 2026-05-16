@@ -78,11 +78,18 @@
 **Tuning constants** (ใน `app.py`):
 
 ```python
-CHUNK_DAYS = 30         # ซอยช่วงวันที่เป็นก้อนละ 30 วัน
-PAGE_LIMIT = 5000       # records ต่อ 1 request ของ iSurvey
-MAX_WORKERS = 4         # concurrent chunks (iSurvey rate-limit ที่ 8 workers ล้ม)
-REQUEST_TIMEOUT = 120   # วินาทีต่อ request
+APP_VERSION = '1.2.0'                          # แสดงที่ login page footer
+
+CHUNK_DAYS = 30                                # ซอยช่วงวันที่เป็นก้อนละ 30 วัน
+PAGE_LIMIT = 5000                              # records ต่อ 1 request ของ iSurvey
+MAX_WORKERS = 4                                # concurrent chunks ต่อ user (default; ใต้ per-account limit ~8 ของ iSurvey)
+FAST_MAX_WORKERS = 6                           # override สำหรับ user ใน FAST_MODE_USERS
+FAST_MODE_USERS = {'noppadol', 'noppadols'}    # whitelist รับ FAST_MAX_WORKERS — heavy users (ดึง 1 ปี)
+ISURVEY_MAX_CONCURRENT = 30                    # process-wide semaphore cap iSurvey HTTP calls
+REQUEST_TIMEOUT = 120                          # วินาทีต่อ request
 ```
+
+Heavy-user fetch (1 ปี / 365d) ที่ใช้ `FAST_MAX_WORKERS=6` คาดเร็วกว่า baseline ~33% (3:53 min → ~2:35 min)
 
 ## Project Structure
 
@@ -184,3 +191,7 @@ docker run -p 5000:5000 --env-file .env se-report
 - [x] Drop pivot column-sort feature (PivotTable.js sort เป็น global per-axis ไม่ใช่ per-column ทำให้สับสนกับ user)
 - [x] ลบ Dashboard view ออกจากโครงการ (รวมถึง Chart.js / chartjs-chart-treemap / chartjs-plugin-datalabels และ helpers ทั้งหมด) — เหลือแค่ Table / Pivot / Spreadsheet
 - [x] ซ่อน radio Enquiry / Close Claim ใน toolbar (`display:none`) — คง default `enquiry` ไว้สำหรับ form submit
+- [x] Gunicorn `gthread` workers (1 worker × 48 threads) แทน sync — รองรับ SSE หลาย stream พร้อมกัน, แก้ปัญหา 30 user คนแรก fetch แล้วคนอื่นรอ
+- [x] Process-wide semaphore (`ISURVEY_MAX_CONCURRENT=30`) wrap iSurvey HTTP calls — cap concurrent connections จากระบบเรากัน iSurvey rate-limit
+- [x] Per-user fast mode — `FAST_MODE_USERS={'noppadol','noppadols'}` ได้ `MAX_WORKERS=6` (จาก default 4) ทำให้ดึง 1 ปี เร็วขึ้น ~33%; user อื่นไม่กระทบ
+- [x] `APP_VERSION` แสดงที่ login page footer (มุมขวาล่าง) ผ่าน Jinja context processor — admin ตรวจ build live ได้โดยไม่ต้องเช็ค server
