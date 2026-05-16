@@ -21,7 +21,7 @@ load_dotenv()
 
 # Bumped when releasing user-visible changes; displayed in the login footer
 # so admins can confirm which build is live without checking the server.
-APP_VERSION = '1.2.0'
+APP_VERSION = '1.2.1'
 
 # Tuning constants for parallel chunk fetching.
 # iSurvey rate-limits concurrent connections; 8 workers failed in prior tests.
@@ -615,6 +615,12 @@ def fetch_stream():
                 executor.shutdown(wait=False, cancel_futures=True)
                 client._logged_in = False
                 yield f"event: error\ndata: {json.dumps({'error': error_msg})}\n\n"
+                # SSE comment to force a flush — some reverse proxies
+                # (Traefik in Dokploy, nginx) hold the last write until
+                # the connection sees another byte. Without this the
+                # terminal event can stall in the proxy buffer and the
+                # browser never sees it.
+                yield ': end\n\n'
                 return
 
             executor.shutdown(wait=True)
@@ -628,6 +634,11 @@ def fetch_stream():
                 f"event: done\ndata: "
                 f"{json.dumps({'total': len(all_records), 'data': all_records, 'columns': columns})}\n\n"
             )
+            # Same flush trampoline as the error branch above. The 'done'
+            # payload is large (full dataset), so the proxy is more likely
+            # to buffer it; this trailing comment guarantees the prior
+            # event reaches the client before the generator exits.
+            yield ': end\n\n'
         finally:
             stop_event.set()
             executor.shutdown(wait=False, cancel_futures=True)
