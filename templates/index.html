@@ -413,10 +413,6 @@
             display: block;
             max-width: 100%;
             height: auto;  /* preserve aspect when CSS-scaled by max-width */
-            /* Soft fade between rebuilds — old content dims while we
-               crunch the new PDF, then the new content fades back in.
-               Cache hits set opacity in one shot so they stay instant. */
-            transition: opacity 0.22s ease;
         }
         .ps-margin-overlay {
             position: absolute; inset: 0;
@@ -1492,7 +1488,6 @@
                                     ขวา <span></span> ซม.</div>
                             </div>
                         </div>
-                        <div class="ps-preview-status" id="psPreviewStatus"></div>
                     </div>
                     <div class="ps-page-nav">
                         <button type="button" class="ps-nav-btn" id="psNavPrev"
@@ -1504,9 +1499,6 @@
                         </span>
                         <button type="button" class="ps-nav-btn" id="psNavNext"
                             title="หน้าถัดไป">&#9654;</button>
-                        <span class="ps-nav-spacer"></span>
-                        <button type="button" class="ps-nav-btn" id="psNavFit"
-                            title="พอดีกับหน้าจอ">⤢</button>
                     </div>
                 </div>
                 <aside class="ps-google-sidebar">
@@ -1627,24 +1619,11 @@
                         </label>
                     </div>
                 </details>
-                <details class="ps-section">
-                    <summary>พื้นที่พิมพ์ (Print Area)</summary>
-                    <div class="ps-section-body">
-                        <label class="check-row" style="gap:6px;">
-                            <input type="text" id="psPrintArea"
-                                placeholder="เช่น A1:G100 (ว่าง = พิมพ์ทุกเซลล์)"
-                                style="flex:1;min-width:0;padding:6px 8px;font-size:13px;
-                                font-family:ui-monospace,Consolas,monospace;
-                                border:1px solid #cbd5e1;border-radius:4px;
-                                text-transform:uppercase;">
-                            <button type="button" id="psUseSelectionBtn" class="modal-btn secondary"
-                                style="padding:5px 10px;font-size:12px;white-space:nowrap;"
-                                title="ดึงพื้นที่ที่ลากเลือกอยู่ใน sheet ไปใส่ในช่อง">
-                                📐 ใช้
-                            </button>
-                        </label>
-                    </div>
-                </details>
+                <!-- Hidden carrier for the print range — the scope
+                     dropdown ("เซลล์ที่เลือก") drives this now, so the
+                     visible UI is gone but the value still feeds the
+                     print pipeline via _readPageSetupFromForm. -->
+                <input type="hidden" id="psPrintArea" value="">
                 </div>
                 </aside>
             </div>
@@ -3636,13 +3615,11 @@
             const myToken = ++_psPreviewState.buildToken;
             const ps = _readPageSetupFromForm();
             const cacheKey = JSON.stringify(ps);
-            const previewCanvas = document.getElementById('psPreviewCanvas');
             // Cache hit → skip the slow jsPDF + autoTable + Thai font
             // build entirely (and the PDF.js parse too) so toggling
-            // between previously-seen states is instant. Don't touch
-            // the loading status text on a hit — the preview swap
-            // should feel instant, not "loading...". Also leave opacity
-            // alone so we don't accidentally fade a perfectly-cached swap.
+            // between previously-seen states is instant. Keep the
+            // status text untouched so cache hits don't even flash
+            // "loading…".
             if (_pdfDocCache.has(cacheKey)) {
                 const pdf = _pdfDocCache.get(cacheKey);
                 _pdfCacheTouch(cacheKey, pdf);
@@ -3654,19 +3631,12 @@
                 }
                 await _drawPsPreviewPage();
                 if (myToken !== _psPreviewState.buildToken) return;
-                if (previewCanvas) previewCanvas.style.opacity = '1';
                 _setPsPreviewStatus(
                     `Preview · ${pdf.numPages} หน้า · ค่าจะใช้จริงเมื่อกด "ถัดไป"`
                 );
                 return;
             }
             _setPsPreviewStatus('กำลังสร้าง preview...');
-            // Dim the old preview while we crunch the new PDF — gives the
-            // user a clear "we're working on it" cue, and pairs with the
-            // fade-back-up below so the new content appears smoothly
-            // instead of snapping in. CSS transition (0.22s) handles the
-            // actual animation.
-            if (previewCanvas) previewCanvas.style.opacity = '0.35';
             let blob;
             try {
                 await loadPdfJsAssets();
@@ -3674,13 +3644,11 @@
             } catch (e) {
                 console.warn('preview build failed:', e);
                 _setPsPreviewStatus('สร้าง preview ไม่สำเร็จ');
-                if (previewCanvas) previewCanvas.style.opacity = '1';
                 return;
             }
             if (myToken !== _psPreviewState.buildToken) return;
             if (!blob) {
                 _setPsPreviewStatus('Sheet ว่างเปล่าหรือ Print Area อยู่นอกข้อมูล');
-                if (previewCanvas) previewCanvas.style.opacity = '1';
                 return;
             }
             try {
@@ -3703,10 +3671,6 @@
                     _psPreviewState.pageNumber = 1;
                 }
                 await _drawPsPreviewPage();
-                // Fade the new content back up to full opacity. CSS
-                // transition turns this single property write into a
-                // smooth ~0.22s reveal that pairs with the dim above.
-                if (previewCanvas) previewCanvas.style.opacity = '1';
                 _setPsPreviewStatus(
                     `Preview · ${pdf.numPages} หน้า · ${Math.round(blob.size / 1024)} KB · `
                     + `ค่าจะใช้จริงเมื่อกด "ถัดไป"`
@@ -3714,7 +3678,6 @@
             } catch (e) {
                 console.warn('PDF.js render failed:', e);
                 _setPsPreviewStatus('แสดง preview ไม่สำเร็จ: ' + (e && e.message || e));
-                if (previewCanvas) previewCanvas.style.opacity = '1';
             }
         }
 
@@ -3742,14 +3705,36 @@
             (async () => {
                 const page = await state.pdf.getPage(state.pageNumber);
                 const baseViewport = page.getViewport({ scale: 1 });
-                const availW = wrap.clientWidth - 16; // a little breathing room
-                state.renderScale = Math.max(0.5, Math.min(3, availW / baseViewport.width));
+                // Fit BOTH width and height — A4 portrait used to overflow
+                // the preview area vertically because we only checked
+                // width, so the bottom of the page (and its dashed margin
+                // line) got hidden behind the scrollbar.
+                const availW = wrap.clientWidth - 16;
+                const availH = wrap.clientHeight - 16;
+                const scaleW = availW / baseViewport.width;
+                const scaleH = availH / baseViewport.height;
+                state.renderScale = Math.max(0.5, Math.min(3, scaleW, scaleH));
                 _drawPsPreviewPage();
             })();
         }
 
         function openPageSetupModal() {
-            _seedPageSetupForm(loadPageSetup());
+            // Print Area + repeat ranges are per-print-job choices that
+            // happen to live in the persisted state (so the print
+            // pipeline can read them). Wipe them on every open so a
+            // stale "D5:F15" from a previous Selected-cells print
+            // doesn't linger while the scope dropdown shows "current
+            // sheet" — that mismatch shows up as: preview displays an
+            // old slice that doesn't match the user's new selection.
+            // Paper size / margins / orientation / scaling / header /
+            // footer / B&W still persist because those ARE preferences.
+            const saved = loadPageSetup();
+            saved.printArea = '';
+            saved.repeatRowStart = 0;
+            saved.repeatRowEnd = 0;
+            saved.repeatColStart = 0;
+            saved.repeatColEnd = 0;
+            _seedPageSetupForm(saved);
             _psPreviewState.pageNumber = 1;
             // Scope is a transient choice (not persisted) — start at
             // "current sheet" every open, and refresh the "Selected cells"
@@ -3776,6 +3761,25 @@
             // .pdf.destroy() so we don't double-free.
             _psPreviewState.pdf = null;
             _pdfCacheClearAll();
+            // Wipe the canvas so a stale image from this session doesn't
+            // briefly flash on the next open before the new build lands.
+            // Also reset the offscreen render buffer + status / page-nav
+            // labels for the same reason.
+            const canvas = document.getElementById('psPreviewCanvas');
+            if (canvas) {
+                canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
+                canvas.width = 0;
+                canvas.height = 0;
+            }
+            if (_psPreviewState._offCanvas) {
+                _psPreviewState._offCanvas.width = 0;
+                _psPreviewState._offCanvas.height = 0;
+                _psPreviewState._offCanvas = null;
+            }
+            _psPreviewState.pageNumber = 1;
+            _psPreviewState.pageCount = 1;
+            _setPsPreviewStatus('');
+            _updatePsPageNav();
         }
 
         function _savePageSetupFromForm() {
@@ -3804,15 +3808,6 @@
             if (!r || r.startRow == null) return null;
             return _colIdxToLetter(r.startColumn) + (r.startRow + 1)
                 + ':' + _colIdxToLetter(r.endColumn) + (r.endRow + 1);
-        }
-
-        function _fillPrintAreaFromSelection() {
-            const a1 = _getUniverActiveRangeA1();
-            if (!a1) {
-                alert('ยังไม่มี selection — กรุณาเปิด workbook และลากคลุมพื้นที่ก่อน');
-                return;
-            }
-            document.getElementById('psPrintArea').value = a1;
         }
 
         // Mirror Google Sheets' "Selected cells (B2:F10)" label — when the
@@ -3891,14 +3886,9 @@
             _resetPageSetupForm();
             _schedulePsPreview();
         });
-        document.getElementById('psUseSelectionBtn').addEventListener('click', () => {
-            _fillPrintAreaFromSelection();
-            _schedulePsPreview();
-        });
         document.getElementById('psPrintScope').addEventListener('change', _onScopeChange);
         document.getElementById('psNavPrev').addEventListener('click', () => _gotoPsPage(-1));
         document.getElementById('psNavNext').addEventListener('click', () => _gotoPsPage(+1));
-        document.getElementById('psNavFit').addEventListener('click', _fitPsPreviewToWidth);
         // Margin / Scaling preset dropdowns drive the hidden carrier
         // fields + show/hide the custom sub-forms.
         document.getElementById('psMarginPreset').addEventListener('change', (e) => {
