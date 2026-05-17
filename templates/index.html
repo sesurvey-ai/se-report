@@ -322,18 +322,30 @@
            icon carries the visual weight (no more blue-filled Save). */
         .se-file-ops button[data-op="save"] svg { color: #2563eb; }
         .se-file-ops button[data-op="savexlsx"] svg { color: #16a34a; }
-        /* Status indicator is now always-visible; .dirty toggles red/green. */
-        .se-file-ops #sheetDirtyIndicator {
-            display: inline-flex; align-items: center; gap: 4px;
+        /* Print button — neutral slate so it doesn't compete with the
+           coloured save/refresh icons. */
+        .se-file-ops button[data-op="print"] svg { color: #475569; }
+        /* Status indicator lives in the Univer tab bar but is pinned to
+           the LEFT edge with absolute positioning so it visually sits
+           above the "ข้อมูล" refresh button (which is the leftmost item
+           in the ribbon row below). The tab bar's tab buttons (เมนู /
+           สูตร / โฟกัส) stay center-aligned because the indicator is out
+           of flex flow. The parent tab bar is forced to position:
+           relative in JS (injectCrosshairTab) so this anchoring works. */
+        #sheetDirtyIndicator {
+            position: absolute;
+            left: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            display: inline-flex; align-items: center; gap: 6px;
             font-size: 12px;
-            margin-left: 4px;
-            color: #16a34a;            /* saved (default) — green */
+            color: #16a34a;
             font-weight: 500;
+            user-select: none;
+            line-height: 1.2;
         }
-        .se-file-ops #sheetDirtyIndicator.dirty {
-            color: #dc2626;            /* unsaved — red */
-        }
-        .se-file-ops #sheetDirtyIndicator::before {
+        #sheetDirtyIndicator.dirty { color: #dc2626; }
+        #sheetDirtyIndicator::before {
             content: '';
             display: inline-block;
             width: 8px; height: 8px;
@@ -2367,6 +2379,27 @@
                     relabelTab(tab, 'สูตร');
                 }
             }
+            // Status indicator (saved / ● unsaved) is pinned to the LEFT
+            // edge of the tab bar via absolute positioning so it visually
+            // lines up above the "ข้อมูล" refresh button in the ribbon
+            // row below — not centered with the tab buttons. We force the
+            // tab bar to position: relative so the absolute anchor works
+            // (Univer's default is static).
+            if (getComputedStyle(tabBar).position === 'static') {
+                tabBar.style.position = 'relative';
+            }
+            if (!tabBar.querySelector('#sheetDirtyIndicator')) {
+                const ind = document.createElement('span');
+                ind.id = 'sheetDirtyIndicator';
+                ind.innerHTML = '<span class="status-label">saved</span>';
+                ind.classList.toggle('dirty', !!sheetState.dirty);
+                const labelEl = ind.querySelector('.status-label');
+                if (labelEl) labelEl.textContent = sheetState.dirty ? 'unsaved' : 'saved';
+                ind.title = sheetState.dirty
+                    ? 'มีการแก้ไขที่ยังไม่ได้บันทึก'
+                    : 'บันทึกแล้ว';
+                tabBar.appendChild(ind);
+            }
             if (tabBar.querySelector('.univer-crosshair-tab')) {
                 setCrosshairButtonState();
                 return;
@@ -2391,7 +2424,8 @@
             //     + subtree catches text-node mutations without us needing
             //     to re-create the whole button.
             _crosshairTabObserver = new MutationObserver(() => {
-                if (!tabBar.querySelector('.univer-crosshair-tab')) {
+                if (!tabBar.querySelector('.univer-crosshair-tab')
+                    || !tabBar.querySelector('#sheetDirtyIndicator')) {
                     setTimeout(injectCrosshairTab, 50);
                     return;
                 }
@@ -2460,41 +2494,39 @@
                 '<rect x="7" y="13" width="10" height="7"/>' +
                 '<path d="M8 3v5h7V3"/>' +
                 '</svg>';
-            // Save-XLSX: green spreadsheet icon (rows + an "X" mark in the
-            // top-right cell to evoke Excel) — distinct from the plain Save
-            // disk icon so users don't confuse "Save .se.json" with "Save
-            // .xlsx".
+            // Save-XLSX: document outline with a big "X" centered inside,
+            // evoking the Microsoft Excel file icon while keeping a single-
+            // colour stroke so the .se-file-ops button[data-op=savexlsx]
+            // CSS tint (#16a34a) carries through cleanly.
             const ICON_XLSX =
                 '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
-                '<rect x="3" y="4" width="18" height="16" rx="1"/>' +
-                '<path d="M3 10h18M3 16h18M9 4v16M15 4v16"/>' +
-                '<path d="M16 6l4 3M20 6l-4 3" stroke-width="2.4"/>' +
+                '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>' +
+                '<polyline points="14 2 14 8 20 8"/>' +
+                '<line x1="8.5" y1="13" x2="15.5" y2="20"/>' +
+                '<line x1="15.5" y1="13" x2="8.5" y2="20"/>' +
+                '</svg>';
+            // Print: classic printer silhouette — top sheet, body, output
+            // tray. Strokes use currentColor so CSS tints it slate-grey to
+            // sit visually quieter than the coloured save icons.
+            const ICON_PRINT =
+                '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+                '<polyline points="6 9 6 2 18 2 18 9"/>' +
+                '<path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/>' +
+                '<rect x="6" y="14" width="12" height="8"/>' +
                 '</svg>';
             wrap.innerHTML =
                 '<button type="button" data-op="refresh" title="โหลดข้อมูลปัจจุบัน (จาก lastRecords) เข้า workbook">' + ICON_REFRESH + '<span>ข้อมูล</span></button>' +
                 '<button type="button" data-op="open" title="เปิดไฟล์ .se / .se.json หรือ Excel">' + ICON_OPEN + '</button>' +
                 '<button type="button" data-op="save" title="บันทึก workbook เป็นไฟล์ .se.json (เก็บสูตรครบ)">' + ICON_SAVE + '</button>' +
                 '<button type="button" data-op="savexlsx" title="บันทึกเป็น .xlsx (สูตรกลายเป็นค่า)">' + ICON_XLSX + '</button>' +
-                '<span id="sheetDirtyIndicator"><span class="status-label">saved</span></span>';
+                '<button type="button" data-op="print" title="พิมพ์ (Ctrl+P)">' + ICON_PRINT + '</button>';
             wrap.querySelector('[data-op="refresh"]').addEventListener('click', newFromData);
             wrap.querySelector('[data-op="open"]').addEventListener('click', openSheetFile);
             wrap.querySelector('[data-op="save"]').addEventListener('click', saveSheetJson);
             wrap.querySelector('[data-op="savexlsx"]').addEventListener('click', saveSheetXlsx);
+            wrap.querySelector('[data-op="print"]').addEventListener('click', printActiveView);
             // Insert as the first grid column of the ribbon row.
             ribbonRow.insertBefore(wrap, ribbonRow.firstChild);
-            // Sync the dirty indicator's state to the current flag (it gets
-            // re-created here so the class from a previous element doesn't
-            // carry over). Always visible now: green "saved" by default,
-            // red "● unsaved" when sheetState.dirty.
-            const ind = wrap.querySelector('#sheetDirtyIndicator');
-            if (ind) {
-                ind.classList.toggle('dirty', !!sheetState.dirty);
-                const labelEl = ind.querySelector('.status-label');
-                if (labelEl) labelEl.textContent = sheetState.dirty ? 'unsaved' : 'saved';
-                ind.title = sheetState.dirty
-                    ? 'มีการแก้ไขที่ยังไม่ได้บันทึก'
-                    : 'บันทึกแล้ว';
-            }
             if (_fileOpsObserver) {
                 try { _fileOpsObserver.disconnect(); } catch {}
             }
@@ -2623,6 +2655,24 @@
             const labelEl = ind.querySelector('.status-label');
             if (labelEl) labelEl.textContent = flag ? 'unsaved' : 'saved';
             ind.title = flag ? 'มีการแก้ไขที่ยังไม่ได้บันทึก' : 'บันทึกแล้ว';
+        }
+
+        // Print the currently active view. Table + Pivot views have proper
+        // @media print rules, but Sheet view (Univer canvas) is hidden when
+        // printing because its canvas-based rendering doesn't print cleanly
+        // — guard against accidental "blank page" prints by telling the
+        // user to switch view (or export to .xlsx + print from Excel).
+        function printActiveView() {
+            const active = document.querySelector('input[name=view]:checked')?.value;
+            if (active === 'spreadsheet') {
+                alert(
+                    'มุมมอง Sheet ไม่รองรับการพิมพ์โดยตรง\n\n' +
+                    'กรุณาเปลี่ยนเป็นมุมมอง "ข้อมูล" หรือ "Pivot" ก่อนพิมพ์\n' +
+                    'หรือกดปุ่ม "บันทึก .xlsx" แล้วเปิดใน Excel เพื่อพิมพ์'
+                );
+                return;
+            }
+            window.print();
         }
 
         function setSheetStatus(msg) {
