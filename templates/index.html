@@ -358,6 +358,232 @@
             max-height: 90vh;
             display: flex; flex-direction: column;
         }
+        /* Google Sheets-style Page Setup modal — top bar with title +
+           page count + Cancel/Next, big canvas preview on the left with
+           dashed-blue margin overlay, settings sidebar on the right.
+           Hard-coded light theme (matches Univer's light-only style). */
+        .ps-google-card {
+            background: #fff;
+            border-radius: 8px;
+            width: 100%; max-width: 1280px;
+            height: 92vh; max-height: 92vh;
+            display: flex; flex-direction: column;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.3);
+            font-size: 14px;
+            color: #1e293b;
+            font-family: 'Segoe UI', Tahoma, sans-serif;
+            overflow: hidden;
+        }
+        .ps-google-topbar {
+            display: flex; align-items: center; gap: 12px;
+            padding: 12px 18px;
+            border-bottom: 1px solid #e2e8f0;
+            background: #f8fafc;
+        }
+        .ps-google-title { font-size: 15px; font-weight: 600; color: #0f172a; }
+        .ps-google-count { font-size: 13px; color: #64748b; }
+        .ps-google-spacer { flex: 1; }
+        .ps-google-body { flex: 1 1 auto; display: flex; min-height: 0; }
+        .ps-google-footbar {
+            display: flex; align-items: center; gap: 8px;
+            padding: 10px 18px;
+            border-top: 1px solid #e2e8f0;
+            background: #f8fafc;
+        }
+        .ps-preview-area {
+            flex: 1 1 auto; min-width: 0;
+            display: flex; flex-direction: column;
+            background: #e9eef5;
+            padding: 24px;
+            gap: 12px;
+        }
+        .ps-canvas-wrap {
+            flex: 1 1 auto; min-height: 0;
+            overflow: auto;
+            display: flex; align-items: flex-start; justify-content: center;
+            padding: 0;
+        }
+        .ps-canvas-inner {
+            position: relative;
+            display: inline-block;
+            background: #fff;
+            box-shadow: 0 4px 14px rgba(15, 23, 42, 0.15);
+        }
+        #psPreviewCanvas {
+            display: block;
+            max-width: 100%;
+            height: auto;  /* preserve aspect when CSS-scaled by max-width */
+        }
+        .ps-margin-overlay {
+            position: absolute; inset: 0;
+            pointer-events: none;
+        }
+        .ps-margin-line {
+            position: absolute;
+            border-color: #2563eb;
+            border-style: dashed;
+            border-width: 0;
+        }
+        .ps-margin-line-top    { top: 0; left: 0; right: 0; border-top-width: 1px; }
+        .ps-margin-line-bottom { bottom: 0; left: 0; right: 0; border-top-width: 1px; }
+        .ps-margin-line-left   { top: 0; bottom: 0; left: 0; border-left-width: 1px; }
+        .ps-margin-line-right  { top: 0; bottom: 0; right: 0; border-left-width: 1px; }
+        .ps-margin-label {
+            position: absolute;
+            background: #fff;
+            border: 1px dashed #2563eb;
+            color: #2563eb;
+            font-size: 11px;
+            padding: 2px 6px;
+            border-radius: 2px;
+            white-space: nowrap;
+            font-family: 'Segoe UI', Tahoma, sans-serif;
+        }
+        .ps-margin-label-top {
+            top: 0; left: 50%; transform: translate(-50%, -50%);
+        }
+        .ps-margin-label-bottom {
+            bottom: 0; left: 50%; transform: translate(-50%, 50%);
+        }
+        .ps-margin-label-left {
+            left: 0; top: 50%; transform: translate(-50%, -50%);
+        }
+        .ps-margin-label-right {
+            right: 0; top: 50%; transform: translate(50%, -50%);
+        }
+        .ps-preview-status {
+            font-size: 11px; color: #64748b;
+            text-align: center;
+            font-family: ui-monospace, Consolas, monospace;
+        }
+        .ps-page-nav {
+            display: flex; align-items: center; gap: 6px;
+            justify-content: center;
+            padding: 6px 0;
+        }
+        .ps-nav-btn {
+            background: #fff;
+            border: 1px solid #cbd5e1;
+            color: #475569;
+            padding: 4px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 13px;
+            font-family: inherit;
+            line-height: 1;
+        }
+        .ps-nav-btn:hover { background: #f1f5f9; }
+        .ps-nav-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+        .ps-nav-label { font-size: 13px; color: #475569; padding: 0 8px; }
+        .ps-nav-spacer { width: 24px; }
+        .ps-google-sidebar {
+            flex: 0 0 340px;
+            border-left: 1px solid #e2e8f0;
+            overflow: auto;
+            background: #fff;
+        }
+        .ps-google-sidebar .modal-form {
+            padding: 14px 18px;
+        }
+        /* Google-style segmented control for the orientation radio. */
+        .ps-radio-bar {
+            display: flex; gap: 6px;
+        }
+        .ps-radio-bar label {
+            flex: 1; text-align: center;
+            border: 1px solid #cbd5e1;
+            padding: 6px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 13px;
+            background: #fff;
+            transition: background 0.12s, border-color 0.12s;
+        }
+        .ps-radio-bar label:has(input:checked) {
+            border-color: #2563eb;
+            background: #eff6ff;
+            color: #1d4ed8;
+            font-weight: 500;
+        }
+        .ps-radio-bar input { display: none; }
+        /* Sub-form shown when a "Custom…" preset is picked. */
+        .ps-sub-form {
+            margin-top: 6px;
+            padding: 8px 10px;
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 4px;
+        }
+        /* Collapsible section (native <details>) — Google's sidebar uses
+           one of these per advanced group. */
+        .ps-section {
+            margin-top: 4px;
+            border-top: 1px solid #e2e8f0;
+        }
+        .ps-section summary {
+            cursor: pointer;
+            padding: 10px 0;
+            font-size: 13px; font-weight: 600;
+            color: #1e293b;
+            list-style: none;
+            display: flex; align-items: center; gap: 6px;
+        }
+        .ps-section summary::-webkit-details-marker { display: none; }
+        .ps-section summary::before {
+            content: '▸';
+            display: inline-block;
+            transition: transform 0.12s;
+            color: #64748b;
+            font-size: 10px;
+        }
+        .ps-section[open] summary::before { transform: rotate(90deg); }
+        .ps-section .ps-section-body {
+            padding: 0 0 12px 0;
+            display: flex; flex-direction: column; gap: 6px;
+        }
+        @media (max-width: 1100px) {
+            .ps-google-card { max-width: 100vw; max-height: 100vh; height: 100vh; border-radius: 0; }
+            .ps-google-body { flex-direction: column; }
+            .ps-google-sidebar { flex: 0 0 auto; border-left: none; border-top: 1px solid #e2e8f0; max-height: 50vh; }
+            .ps-preview-area { padding: 12px; }
+        }
+
+        /* Old preview iframe (kept for backwards compat — no longer
+           shown in the Google-style modal). */
+        .modal-card.with-preview { max-width: 1080px; }
+        .modal-card.with-preview .modal-body {
+            display: flex; gap: 16px; padding: 0;
+        }
+        .modal-card.with-preview .modal-body > .modal-form {
+            flex: 0 0 460px; min-width: 0;
+            padding: 14px 18px;
+            overflow: auto;
+            border-right: 1px solid #e2e8f0;
+        }
+        .modal-card.with-preview .modal-body > .modal-preview {
+            flex: 1 1 auto; min-width: 0;
+            padding: 14px;
+            background: #1e293b;
+            display: flex; flex-direction: column; gap: 8px;
+        }
+        .modal-card.with-preview .modal-preview-frame {
+            flex: 1 1 auto; min-height: 400px;
+            border: none; background: #fff;
+            border-radius: 4px;
+        }
+        .modal-card.with-preview .modal-preview-status {
+            font-size: 11px; color: #cbd5e1;
+            font-family: ui-monospace, Consolas, monospace;
+            text-align: center;
+        }
+        @media (max-width: 1100px) {
+            .modal-card.with-preview .modal-body { flex-direction: column; }
+            .modal-card.with-preview .modal-body > .modal-form {
+                flex: 0 0 auto; border-right: none;
+                border-bottom: 1px solid #e2e8f0;
+            }
+            .modal-card.with-preview .modal-preview-frame { min-height: 240px; }
+        }
         .modal-header {
             display: flex; justify-content: space-between; align-items: center;
             padding: 14px 18px;
@@ -1224,54 +1450,205 @@
         </div>
     </div>
 
-    <!-- Page Setup modal — hidden by default; openPageSetupModal() shows
-         it and seeds the inputs from localStorage. Values flow back the
-         other way through savePageSetupFromForm() on the Save button. -->
+    <!-- Page Setup modal — Google Sheets-style layout: top bar with title +
+         page count + Cancel/Next, big canvas preview on the left with
+         margin overlay, settings sidebar on the right. -->
     <div id="pageSetupModal" class="modal-overlay" style="display:none">
-        <div class="modal-card">
-            <div class="modal-header">
-                <h3>ตั้งค่าหน้ากระดาษ (สำหรับพิมพ์ Sheet view)</h3>
-                <button class="modal-close" type="button" id="psCloseBtn" title="ปิด">&times;</button>
+        <div class="ps-google-card">
+            <div class="ps-google-topbar">
+                <span class="ps-google-title">การตั้งค่าการพิมพ์</span>
+                <span class="ps-google-count">
+                    ทั้งหมด: <span id="psPageCount">—</span> หน้า
+                </span>
+                <span class="ps-google-spacer"></span>
+                <button type="button" class="modal-btn secondary" id="psCancelBtn">ยกเลิก</button>
+                <button type="button" class="modal-btn primary" id="psNextBtn">ถัดไป</button>
+                <button class="modal-close" type="button" id="psCloseBtn" title="ปิด" style="margin-left:8px;">&times;</button>
             </div>
-            <div class="modal-body">
+            <div class="ps-google-body">
+                <div class="ps-preview-area">
+                    <div class="ps-canvas-wrap" id="psCanvasWrap">
+                        <div class="ps-canvas-inner" id="psCanvasInner">
+                            <canvas id="psPreviewCanvas"></canvas>
+                            <!-- Margin overlay — absolutely positioned
+                                 dashed lines + size labels recomputed on
+                                 every preview render. -->
+                            <div class="ps-margin-overlay" id="psMarginOverlay">
+                                <div class="ps-margin-line ps-margin-line-top"></div>
+                                <div class="ps-margin-line ps-margin-line-bottom"></div>
+                                <div class="ps-margin-line ps-margin-line-left"></div>
+                                <div class="ps-margin-line ps-margin-line-right"></div>
+                                <div class="ps-margin-label ps-margin-label-top">
+                                    ด้านบน <span></span> ซม.</div>
+                                <div class="ps-margin-label ps-margin-label-bottom">
+                                    ด้านล่าง <span></span> ซม.</div>
+                                <div class="ps-margin-label ps-margin-label-left">
+                                    ซ้าย <span></span> ซม.</div>
+                                <div class="ps-margin-label ps-margin-label-right">
+                                    ขวา <span></span> ซม.</div>
+                            </div>
+                        </div>
+                        <div class="ps-preview-status" id="psPreviewStatus"></div>
+                    </div>
+                    <div class="ps-page-nav">
+                        <button type="button" class="ps-nav-btn" id="psNavPrev"
+                            title="หน้าก่อนหน้า">&#9664;</button>
+                        <span class="ps-nav-label">
+                            <span id="psNavCurrent">1</span>
+                            /
+                            <span id="psNavTotal">1</span>
+                        </span>
+                        <button type="button" class="ps-nav-btn" id="psNavNext"
+                            title="หน้าถัดไป">&#9654;</button>
+                        <span class="ps-nav-spacer"></span>
+                        <button type="button" class="ps-nav-btn" id="psNavFit"
+                            title="พอดีกับหน้าจอ">⤢</button>
+                    </div>
+                </div>
+                <aside class="ps-google-sidebar">
+                <div class="modal-form">
+                <!-- Google-style stacked dropdowns. Most settings are
+                     hidden behind a single dropdown that toggles to a
+                     "Custom…" sub-form when the user picks the custom
+                     preset (mirrors Sheets' UX). Fields that the old
+                     code still depends on (psMarginTop, psScalePercent,
+                     etc.) live inside those sub-forms so existing IDs
+                     keep working. -->
                 <div class="form-row">
-                    <label class="field-label">ขนาดกระดาษ</label>
-                    <select id="psPaperSize">
-                        <option value="a4">A4 (210 × 297 mm)</option>
-                        <option value="a3">A3 (297 × 420 mm)</option>
-                        <option value="a5">A5 (148 × 210 mm)</option>
-                        <option value="letter">Letter (216 × 279 mm)</option>
-                        <option value="legal">Legal (216 × 356 mm)</option>
+                    <label class="field-label">พิมพ์</label>
+                    <select id="psPrintScope">
+                        <option value="current">แผ่นงานปัจจุบัน</option>
+                        <option value="selection">เซลล์ที่เลือก</option>
                     </select>
                 </div>
                 <div class="form-row">
-                    <label class="field-label">แนวกระดาษ</label>
-                    <div class="radio-group">
-                        <label><input type="radio" name="psOri" value="portrait"> แนวตั้ง (Portrait)</label>
-                        <label><input type="radio" name="psOri" value="landscape"> แนวนอน (Landscape)</label>
+                    <label class="field-label">ขนาดกระดาษ</label>
+                    <select id="psPaperSize">
+                        <option value="a4">A4 (21.0cm × 29.7cm)</option>
+                        <option value="a3">A3 (29.7cm × 42.0cm)</option>
+                        <option value="a5">A5 (14.8cm × 21.0cm)</option>
+                        <option value="letter">Letter (21.6cm × 27.9cm)</option>
+                        <option value="legal">Legal (21.6cm × 35.6cm)</option>
+                    </select>
+                </div>
+                <div class="form-row">
+                    <label class="field-label">การวางแนวของหน้า</label>
+                    <div class="ps-radio-bar">
+                        <label><input type="radio" name="psOri" value="portrait"> แนวตั้ง</label>
+                        <label><input type="radio" name="psOri" value="landscape"> แนวนอน</label>
                     </div>
                 </div>
                 <div class="form-row">
-                    <label class="field-label">ระยะขอบ (mm)</label>
-                    <div class="margins-grid">
-                        <label>บน <input type="number" id="psMarginTop" min="0" max="50" step="1"></label>
-                        <label>ล่าง <input type="number" id="psMarginBottom" min="0" max="50" step="1"></label>
-                        <label>ซ้าย <input type="number" id="psMarginLeft" min="0" max="50" step="1"></label>
-                        <label>ขวา <input type="number" id="psMarginRight" min="0" max="50" step="1"></label>
+                    <label class="field-label">สเกล</label>
+                    <select id="psScalingPreset">
+                        <option value="full">ขนาดเต็ม 100%</option>
+                        <option value="fitwidth">พอดีกับความกว้าง (1 หน้ากว้าง)</option>
+                        <option value="fitheight">พอดีกับความยาว (1 หน้ายาว)</option>
+                        <option value="fitpage">พอดีกับหน้า (1×1)</option>
+                        <option value="percent">กำหนดตัวเลขเอง…</option>
+                    </select>
+                    <div class="ps-sub-form" id="psScalingCustom" style="display:none">
+                        <label class="check-row">
+                            เปอร์เซ็นต์
+                            <input type="number" id="psScalePercent" min="10" max="400" step="5"
+                                style="width:64px;margin-left:6px;"> %
+                        </label>
                     </div>
+                    <!-- Hidden carrier fields — kept so existing read/save
+                         code (which references psScaling / psFitWide /
+                         psFitTall) still works. Driven by the preset. -->
+                    <input type="hidden" name="psScaling" id="psScalingHidden" value="full">
+                    <input type="hidden" id="psFitWide" value="1">
+                    <input type="hidden" id="psFitTall" value="0">
                 </div>
                 <div class="form-row">
-                    <label class="field-label">หัว/ท้ายกระดาษ</label>
-                    <label class="check-row"><input type="checkbox" id="psHeader"> แสดงหัวกระดาษ (ชื่อ sheet + ช่วงวันที่)</label>
-                    <label class="check-row"><input type="checkbox" id="psFooter"> แสดงเลขหน้าด้านล่าง (หน้า X / Y)</label>
+                    <label class="field-label">ขอบ</label>
+                    <select id="psMarginPreset">
+                        <option value="normal">ปกติ (1.91/1.91/1.78/1.78 cm)</option>
+                        <option value="narrow">แคบ (0.64/0.64/0.64/0.64 cm)</option>
+                        <option value="wide">กว้าง (2.54/2.54/2.54/2.54 cm)</option>
+                        <option value="custom">กำหนดตัวเลขเอง…</option>
+                    </select>
+                    <div class="ps-sub-form" id="psMarginCustom" style="display:none">
+                        <div class="margins-grid">
+                            <label>บน <input type="number" id="psMarginTop"
+                                min="0" max="50" step="1"></label>
+                            <label>ล่าง <input type="number" id="psMarginBottom"
+                                min="0" max="50" step="1"></label>
+                            <label>ซ้าย <input type="number" id="psMarginLeft"
+                                min="0" max="50" step="1"></label>
+                            <label>ขวา <input type="number" id="psMarginRight"
+                                min="0" max="50" step="1"></label>
+                        </div>
+                    </div>
                 </div>
+                <details class="ps-section">
+                    <summary>การจัดรูปแบบ</summary>
+                    <div class="ps-section-body">
+                        <label class="check-row">
+                            <input type="checkbox" id="psBlackAndWhite">
+                            พิมพ์ขาว-ดำ (ไม่ใช้สี bg / text)
+                        </label>
+                    </div>
+                </details>
+                <details class="ps-section">
+                    <summary>ส่วนหัวและส่วนท้าย</summary>
+                    <div class="ps-section-body">
+                        <label class="check-row">
+                            <input type="checkbox" id="psHeader">
+                            แสดงหัวกระดาษ (ชื่อ sheet + ช่วงวันที่)
+                        </label>
+                        <label class="check-row">
+                            <input type="checkbox" id="psFooter">
+                            แสดงเลขหน้าด้านล่าง (หน้า X / Y)
+                        </label>
+                    </div>
+                </details>
+                <details class="ps-section">
+                    <summary>พิมพ์ซ้ำทุกหน้า (Print Titles)</summary>
+                    <div class="ps-section-body">
+                        <label class="check-row">
+                            แถวบนสุดที่ซ้ำ: row
+                            <input type="number" id="psRepeatRowStart" min="0" max="999" step="1"
+                                style="width:56px;margin:0 4px;"> ถึง
+                            <input type="number" id="psRepeatRowEnd" min="0" max="999" step="1"
+                                style="width:56px;margin:0 4px;">
+                        </label>
+                        <label class="check-row">
+                            คอลัมน์ซ้ายที่ซ้ำ: column
+                            <input type="text" id="psRepeatColStart" maxlength="3" placeholder="A"
+                                style="width:48px;margin:0 4px;text-transform:uppercase;"> ถึง
+                            <input type="text" id="psRepeatColEnd" maxlength="3" placeholder="A"
+                                style="width:48px;margin:0 4px;text-transform:uppercase;">
+                        </label>
+                    </div>
+                </details>
+                <details class="ps-section">
+                    <summary>พื้นที่พิมพ์ (Print Area)</summary>
+                    <div class="ps-section-body">
+                        <label class="check-row" style="gap:6px;">
+                            <input type="text" id="psPrintArea"
+                                placeholder="เช่น A1:G100 (ว่าง = พิมพ์ทุกเซลล์)"
+                                style="flex:1;min-width:0;padding:6px 8px;font-size:13px;
+                                font-family:ui-monospace,Consolas,monospace;
+                                border:1px solid #cbd5e1;border-radius:4px;
+                                text-transform:uppercase;">
+                            <button type="button" id="psUseSelectionBtn" class="modal-btn secondary"
+                                style="padding:5px 10px;font-size:12px;white-space:nowrap;"
+                                title="ดึงพื้นที่ที่ลากเลือกอยู่ใน sheet ไปใส่ในช่อง">
+                                📐 ใช้
+                            </button>
+                        </label>
+                    </div>
+                </details>
+                </div>
+                </aside>
             </div>
-            <div class="modal-footer">
+            <div class="ps-google-footbar">
                 <button type="button" class="modal-btn secondary" id="psResetBtn">รีเซ็ตค่าเริ่มต้น</button>
-                <div class="footer-right">
-                    <button type="button" class="modal-btn secondary" id="psCancelBtn">ยกเลิก</button>
-                    <button type="button" class="modal-btn primary" id="psSaveBtn">บันทึก</button>
-                </div>
+                <span class="ps-google-spacer"></span>
+                <button type="button" class="modal-btn primary" id="psSaveBtn"
+                    style="display:none">บันทึก</button>
             </div>
         </div>
     </div>
@@ -2913,6 +3290,28 @@
             marginTop: 19, marginBottom: 19,
             marginLeft: 18, marginRight: 18,
             header: false, footer: false,
+            // Scaling — Excel "Page Setup → Page" tab equivalent:
+            //   'full'    = print at 100% (default; wide tables get chunked
+            //               horizontally by _splitColumnsForPages)
+            //   'fit'     = auto-scale so the table fits in fitWide pages
+            //               wide × fitTall pages tall (0 = unlimited)
+            //   'percent' = manual scale at scalePercent %
+            scaling: 'full',
+            fitWide: 1,
+            fitTall: 0,
+            scalePercent: 100,
+            // Print Titles — rows + cols that repeat on every printed page.
+            // 1-based row numbers / column letters in the form, 0-based
+            // half-open ranges in storage (Start <= 0 → no repeat).
+            repeatRowStart: 0, repeatRowEnd: 0,
+            repeatColStart: 0, repeatColEnd: 0,
+            // Print Area — limits which cells get printed. Empty = entire
+            // populated range; "A1:G100" = clamp to that A1-style range.
+            printArea: '',
+            // Black & White — strips per-cell fill + text colour in
+            // didParseCell so a colour-coded sheet still prints legibly
+            // on a mono printer.
+            blackAndWhite: false,
         };
 
         function loadPageSetup() {
@@ -2931,6 +3330,89 @@
             catch (e) { console.warn('localStorage write failed:', e); }
         }
 
+        // 0-based column index → A1-style column letter ("A", "Z", "AA"…).
+        function _colIdxToLetter(idx) {
+            if (idx == null || idx < 0) return '';
+            let n = idx + 1, s = '';
+            while (n > 0) {
+                const rem = (n - 1) % 26;
+                s = String.fromCharCode(65 + rem) + s;
+                n = Math.floor((n - 1) / 26);
+            }
+            return s;
+        }
+        // "A" / "Z" / "AA" → 0-based column index. Returns -1 on bad input.
+        function _letterToColIdx(letter) {
+            if (!letter) return -1;
+            const s = String(letter).toUpperCase().replace(/[^A-Z]/g, '');
+            if (!s) return -1;
+            let n = 0;
+            for (let i = 0; i < s.length; i++) {
+                n = n * 26 + (s.charCodeAt(i) - 64);
+            }
+            return n - 1;
+        }
+
+        // Excel-equivalent margin presets in mm. Pick "Custom" whenever
+        // the saved state doesn't match one of these triples.
+        const _MARGIN_PRESETS = {
+            normal: { top: 19, bottom: 19, left: 18, right: 18 },
+            narrow: { top: 6,  bottom: 6,  left: 6,  right: 6  },
+            wide:   { top: 25, bottom: 25, left: 25, right: 25 },
+        };
+
+        function _marginPresetFromState(state) {
+            for (const [k, p] of Object.entries(_MARGIN_PRESETS)) {
+                if (state.marginTop === p.top && state.marginBottom === p.bottom
+                    && state.marginLeft === p.left && state.marginRight === p.right) return k;
+            }
+            return 'custom';
+        }
+
+        function _scalingPresetFromState(state) {
+            if (!state.scaling || state.scaling === 'full') return 'full';
+            if (state.scaling === 'percent') return 'percent';
+            if (state.scaling === 'fit') {
+                if (state.fitWide === 1 && state.fitTall === 0) return 'fitwidth';
+                if (state.fitWide === 0 && state.fitTall === 1) return 'fitheight';
+                if (state.fitWide === 1 && state.fitTall === 1) return 'fitpage';
+            }
+            return 'full';
+        }
+
+        // Map a preset selection back to the hidden carrier fields the
+        // existing read/save code expects (psScalingHidden, psFitWide,
+        // psFitTall). Called whenever the scaling dropdown changes.
+        function _applyScalingPreset(preset) {
+            const hidden = document.getElementById('psScalingHidden');
+            const fw = document.getElementById('psFitWide');
+            const ft = document.getElementById('psFitTall');
+            const customSub = document.getElementById('psScalingCustom');
+            switch (preset) {
+                case 'fitwidth':  hidden.value = 'fit';     fw.value = 1; ft.value = 0; break;
+                case 'fitheight': hidden.value = 'fit';     fw.value = 0; ft.value = 1; break;
+                case 'fitpage':   hidden.value = 'fit';     fw.value = 1; ft.value = 1; break;
+                case 'percent':   hidden.value = 'percent'; fw.value = 1; ft.value = 0; break;
+                case 'full':
+                default:          hidden.value = 'full';    fw.value = 1; ft.value = 0; break;
+            }
+            customSub.style.display = (preset === 'percent') ? '' : 'none';
+        }
+
+        function _applyMarginPreset(preset) {
+            const customSub = document.getElementById('psMarginCustom');
+            if (preset !== 'custom' && _MARGIN_PRESETS[preset]) {
+                const p = _MARGIN_PRESETS[preset];
+                document.getElementById('psMarginTop').value = p.top;
+                document.getElementById('psMarginBottom').value = p.bottom;
+                document.getElementById('psMarginLeft').value = p.left;
+                document.getElementById('psMarginRight').value = p.right;
+                customSub.style.display = 'none';
+            } else {
+                customSub.style.display = '';
+            }
+        }
+
         function _seedPageSetupForm(state) {
             document.getElementById('psPaperSize').value = state.paperSize;
             const oriRadio = document.querySelector(
@@ -2942,19 +3424,49 @@
             document.getElementById('psMarginRight').value = state.marginRight;
             document.getElementById('psHeader').checked = !!state.header;
             document.getElementById('psFooter').checked = !!state.footer;
+            // Scaling — drive both the visible preset dropdown and the
+            // hidden carrier fields so reads/saves keep working.
+            const scalingPreset = _scalingPresetFromState(state);
+            document.getElementById('psScalingPreset').value = scalingPreset;
+            document.getElementById('psScalingHidden').value = state.scaling || 'full';
+            document.getElementById('psFitWide').value = state.fitWide || 1;
+            document.getElementById('psFitTall').value = state.fitTall || 0;
+            document.getElementById('psScalePercent').value = state.scalePercent || 100;
+            document.getElementById('psScalingCustom').style.display =
+                (scalingPreset === 'percent') ? '' : 'none';
+            // Margins — same idea, dropdown + show/hide sub-form
+            const marginPreset = _marginPresetFromState(state);
+            document.getElementById('psMarginPreset').value = marginPreset;
+            document.getElementById('psMarginCustom').style.display =
+                (marginPreset === 'custom') ? '' : 'none';
+            // Print Titles — 1-based row numbers / column letters
+            document.getElementById('psRepeatRowStart').value =
+                state.repeatRowStart > 0 ? state.repeatRowStart : 0;
+            document.getElementById('psRepeatRowEnd').value =
+                state.repeatRowEnd > 0 ? state.repeatRowEnd : 0;
+            document.getElementById('psRepeatColStart').value =
+                state.repeatColStart > 0 ? _colIdxToLetter(state.repeatColStart - 1) : '';
+            document.getElementById('psRepeatColEnd').value =
+                state.repeatColEnd > 0 ? _colIdxToLetter(state.repeatColEnd - 1) : '';
+            document.getElementById('psPrintArea').value = state.printArea || '';
+            document.getElementById('psBlackAndWhite').checked = !!state.blackAndWhite;
         }
 
-        function openPageSetupModal() {
-            _seedPageSetupForm(loadPageSetup());
-            document.getElementById('pageSetupModal').style.display = 'flex';
-        }
-        function closePageSetupModal() {
-            document.getElementById('pageSetupModal').style.display = 'none';
-        }
-
-        function _savePageSetupFromForm() {
+        // Mirrors the form back into a PAGE_SETUP-shaped object without
+        // persisting it — used to drive the live preview while the user
+        // is still tweaking inputs.
+        function _readPageSetupFromForm() {
             const oriEl = document.querySelector('input[name=psOri]:checked');
-            const state = {
+            const colStart = _letterToColIdx(
+                document.getElementById('psRepeatColStart').value);
+            const colEnd = _letterToColIdx(
+                document.getElementById('psRepeatColEnd').value);
+            // Scaling now lives in a hidden carrier field driven by the
+            // preset dropdown — read it directly.
+            const scalingValue = document.getElementById('psScalingHidden').value || 'full';
+            const fitWideValue = +document.getElementById('psFitWide').value;
+            const fitTallValue = +document.getElementById('psFitTall').value;
+            return {
                 paperSize: document.getElementById('psPaperSize').value || 'a4',
                 orientation: (oriEl && oriEl.value) || 'landscape',
                 marginTop: +document.getElementById('psMarginTop').value || 0,
@@ -2963,7 +3475,291 @@
                 marginRight: +document.getElementById('psMarginRight').value || 0,
                 header: document.getElementById('psHeader').checked,
                 footer: document.getElementById('psFooter').checked,
+                scaling: scalingValue,
+                fitWide: isFinite(fitWideValue) ? Math.max(0, fitWideValue) : 1,
+                fitTall: isFinite(fitTallValue) ? Math.max(0, fitTallValue) : 0,
+                scalePercent: Math.max(10, Math.min(400,
+                    +document.getElementById('psScalePercent').value || 100)),
+                repeatRowStart: Math.max(0,
+                    +document.getElementById('psRepeatRowStart').value || 0),
+                repeatRowEnd: Math.max(0,
+                    +document.getElementById('psRepeatRowEnd').value || 0),
+                repeatColStart: colStart >= 0 ? colStart + 1 : 0,
+                repeatColEnd: colEnd >= 0 ? colEnd + 1 : 0,
+                printArea: document.getElementById('psPrintArea').value.trim().toUpperCase(),
+                blackAndWhite: document.getElementById('psBlackAndWhite').checked,
             };
+        }
+
+        // Lifecycle for the Google-Sheets-style canvas preview inside
+        // the Page Setup modal. Re-renders the PDF in the background on
+        // every form change (debounced 400ms) and pipes the resulting
+        // blob through PDF.js, drawing the current page onto a canvas
+        // + sizing the absolute-positioned margin overlay to match.
+        // _psPreviewBuildToken prevents stale builds from clobbering a
+        // newer one when the user types fast.
+        const _psPreviewState = {
+            buildToken: 0,
+            timer: null,
+            pdf: null,           // PDF.js document, owns its own buffer
+            pageNumber: 1,
+            pageCount: 1,
+            ps: null,            // page-setup state used for the current pdf
+            renderScale: 1.5,    // canvas pixel density
+        };
+
+        // PDF doc cache — keyed by JSON.stringify(ps), bounded LRU.
+        // Without this, every scope/preset switch eats 1-2s rebuilding
+        // jsPDF + autoTable + Thai font even when the user is just
+        // toggling back-and-forth between two states. With it, repeat
+        // switches are near-instant. Evicted entries get destroyed to
+        // release the PDF.js worker's buffer.
+        const _PDF_CACHE_SIZE = 6;
+        const _pdfDocCache = new Map();
+
+        function _pdfCacheClearAll() {
+            for (const pdf of _pdfDocCache.values()) {
+                try { pdf.destroy(); } catch {}
+            }
+            _pdfDocCache.clear();
+        }
+        function _pdfCacheTouch(key, pdf) {
+            // Move-to-end so this entry counts as MRU
+            if (_pdfDocCache.has(key)) _pdfDocCache.delete(key);
+            _pdfDocCache.set(key, pdf);
+            while (_pdfDocCache.size > _PDF_CACHE_SIZE) {
+                const oldestKey = _pdfDocCache.keys().next().value;
+                const oldPdf = _pdfDocCache.get(oldestKey);
+                if (oldPdf && oldPdf !== _psPreviewState.pdf) {
+                    try { oldPdf.destroy(); } catch {}
+                }
+                _pdfDocCache.delete(oldestKey);
+            }
+        }
+
+        function _setPsPreviewStatus(msg) {
+            const el = document.getElementById('psPreviewStatus');
+            if (el) el.textContent = msg;
+        }
+
+        function _updatePsPageNav() {
+            const cur = document.getElementById('psNavCurrent');
+            const tot = document.getElementById('psNavTotal');
+            const prev = document.getElementById('psNavPrev');
+            const next = document.getElementById('psNavNext');
+            const pageCountTop = document.getElementById('psPageCount');
+            if (cur) cur.textContent = _psPreviewState.pageNumber;
+            if (tot) tot.textContent = _psPreviewState.pageCount;
+            if (pageCountTop) pageCountTop.textContent = _psPreviewState.pageCount;
+            if (prev) prev.disabled = _psPreviewState.pageNumber <= 1;
+            if (next) next.disabled = _psPreviewState.pageNumber >= _psPreviewState.pageCount;
+        }
+
+        // Render the active page of the active PDF document into the
+        // preview canvas, then size the margin overlay to match. The
+        // margin numbers come from the page-setup state that produced
+        // this PDF (NOT the form state right now — those may have
+        // diverged while the previous build was rendering).
+        async function _drawPsPreviewPage() {
+            const state = _psPreviewState;
+            if (!state.pdf) return;
+            const canvas = document.getElementById('psPreviewCanvas');
+            const inner = document.getElementById('psCanvasInner');
+            const overlay = document.getElementById('psMarginOverlay');
+            if (!canvas || !inner) return;
+            const page = await state.pdf.getPage(state.pageNumber);
+            const viewport = page.getViewport({ scale: state.renderScale });
+            const newW = Math.round(viewport.width);
+            const newH = Math.round(viewport.height);
+            // Anti-flicker: render to an offscreen canvas first so the
+            // visible canvas keeps its previous content while PDF.js does
+            // the (slow, async) draw. Then transfer the result in two
+            // synchronous lines — drawImage immediately repaints over any
+            // resize-clear, so the user never sees a blank frame between
+            // old preview and new preview.
+            const off = state._offCanvas
+                || (state._offCanvas = document.createElement('canvas'));
+            off.width = newW;
+            off.height = newH;
+            // Don't pin inner to canvas's intrinsic px — let it shrink-
+            // wrap the canvas's CSS display box instead. With `canvas {
+            // max-width: 100%; height: auto }` the canvas keeps its
+            // aspect ratio under any CSS scale, so the overlay's % values
+            // below land at the right CSS positions regardless of how
+            // big the canvas actually renders on screen.
+            inner.style.width = '';
+            inner.style.height = '';
+            await page.render({
+                canvasContext: off.getContext('2d'), viewport,
+            }).promise;
+            // Transfer offscreen → visible. Only resize the visible canvas
+            // when dimensions actually change (resizing clears it) — if
+            // paper size & orientation are unchanged across rebuilds, the
+            // dimensions match and drawImage overwrites in place with no
+            // intermediate clear.
+            if (canvas.width !== newW) canvas.width = newW;
+            if (canvas.height !== newH) canvas.height = newH;
+            canvas.getContext('2d').drawImage(off, 0, 0);
+            // Position margin overlay as % of the inner box — robust
+            // against the device-px vs CSS-px discrepancy that would
+            // otherwise misplace the dashed lines whenever PDF.js's
+            // intrinsic canvas size != its rendered display size.
+            const ps = state.ps || loadPageSetup();
+            const paperWmm = _paperWidthMm(ps.paperSize, ps.orientation);
+            const paperHmm = (ps.orientation === 'landscape')
+                ? PAPER_SIZES_MM[ps.paperSize].w
+                : PAPER_SIZES_MM[ps.paperSize].h;
+            if (overlay) {
+                overlay.style.left   = (ps.marginLeft   / paperWmm * 100) + '%';
+                overlay.style.right  = (ps.marginRight  / paperWmm * 100) + '%';
+                overlay.style.top    = (ps.marginTop    / paperHmm * 100) + '%';
+                overlay.style.bottom = (ps.marginBottom / paperHmm * 100) + '%';
+                // Labels in cm with 2 decimals to match Google's UX
+                const fmt = (mm) => (mm / 10).toFixed(2);
+                overlay.querySelector('.ps-margin-label-top    span').textContent = fmt(ps.marginTop);
+                overlay.querySelector('.ps-margin-label-bottom span').textContent = fmt(ps.marginBottom);
+                overlay.querySelector('.ps-margin-label-left   span').textContent = fmt(ps.marginLeft);
+                overlay.querySelector('.ps-margin-label-right  span').textContent = fmt(ps.marginRight);
+            }
+            _updatePsPageNav();
+        }
+
+        async function _renderPsPreview() {
+            if (!sheetState.mounted) {
+                _setPsPreviewStatus('ยังไม่มี workbook — เปิด/สร้างก่อนถึงจะดู preview ได้');
+                return;
+            }
+            const myToken = ++_psPreviewState.buildToken;
+            const ps = _readPageSetupFromForm();
+            const cacheKey = JSON.stringify(ps);
+            // Cache hit → skip the slow jsPDF + autoTable + Thai font
+            // build entirely (and the PDF.js parse too) so toggling
+            // between previously-seen states is instant. Don't touch
+            // the loading status text on a hit — the preview swap
+            // should feel instant, not "loading...".
+            if (_pdfDocCache.has(cacheKey)) {
+                const pdf = _pdfDocCache.get(cacheKey);
+                _pdfCacheTouch(cacheKey, pdf);
+                _psPreviewState.pdf = pdf;
+                _psPreviewState.ps = ps;
+                _psPreviewState.pageCount = pdf.numPages;
+                if (_psPreviewState.pageNumber > pdf.numPages) {
+                    _psPreviewState.pageNumber = 1;
+                }
+                await _drawPsPreviewPage();
+                if (myToken !== _psPreviewState.buildToken) return;
+                _setPsPreviewStatus(
+                    `Preview · ${pdf.numPages} หน้า · ค่าจะใช้จริงเมื่อกด "ถัดไป"`
+                );
+                return;
+            }
+            _setPsPreviewStatus('กำลังสร้าง preview...');
+            let blob;
+            try {
+                await loadPdfJsAssets();
+                blob = await printSheetToPdf(ps, true);
+            } catch (e) {
+                console.warn('preview build failed:', e);
+                _setPsPreviewStatus('สร้าง preview ไม่สำเร็จ');
+                return;
+            }
+            if (myToken !== _psPreviewState.buildToken) return;
+            if (!blob) {
+                _setPsPreviewStatus('Sheet ว่างเปล่าหรือ Print Area อยู่นอกข้อมูล');
+                return;
+            }
+            try {
+                const buf = await blob.arrayBuffer();
+                if (myToken !== _psPreviewState.buildToken) return;
+                const pdf = await window.pdfjsLib.getDocument({ data: buf }).promise;
+                if (myToken !== _psPreviewState.buildToken) {
+                    pdf.destroy();
+                    return;
+                }
+                // Park in cache — DON'T destroy the previously-current
+                // pdf here; it may also be cached (and the LRU evict
+                // path takes care of destruction when it really falls
+                // out of the cache).
+                _pdfCacheTouch(cacheKey, pdf);
+                _psPreviewState.pdf = pdf;
+                _psPreviewState.ps = ps;
+                _psPreviewState.pageCount = pdf.numPages;
+                if (_psPreviewState.pageNumber > pdf.numPages) {
+                    _psPreviewState.pageNumber = 1;
+                }
+                await _drawPsPreviewPage();
+                _setPsPreviewStatus(
+                    `Preview · ${pdf.numPages} หน้า · ${Math.round(blob.size / 1024)} KB · `
+                    + `ค่าจะใช้จริงเมื่อกด "ถัดไป"`
+                );
+            } catch (e) {
+                console.warn('PDF.js render failed:', e);
+                _setPsPreviewStatus('แสดง preview ไม่สำเร็จ: ' + (e && e.message || e));
+            }
+        }
+
+        function _schedulePsPreview() {
+            clearTimeout(_psPreviewState.timer);
+            _psPreviewState.timer = setTimeout(_renderPsPreview, 400);
+        }
+
+        function _gotoPsPage(delta) {
+            const state = _psPreviewState;
+            if (!state.pdf) return;
+            const next = Math.max(1, Math.min(state.pageCount,
+                state.pageNumber + delta));
+            if (next === state.pageNumber) return;
+            state.pageNumber = next;
+            _drawPsPreviewPage();
+        }
+
+        // Fit-to-width — recompute renderScale so the canvas fills the
+        // available preview area, then re-render at the new scale.
+        function _fitPsPreviewToWidth() {
+            const wrap = document.getElementById('psCanvasWrap');
+            const state = _psPreviewState;
+            if (!wrap || !state.pdf) return;
+            (async () => {
+                const page = await state.pdf.getPage(state.pageNumber);
+                const baseViewport = page.getViewport({ scale: 1 });
+                const availW = wrap.clientWidth - 16; // a little breathing room
+                state.renderScale = Math.max(0.5, Math.min(3, availW / baseViewport.width));
+                _drawPsPreviewPage();
+            })();
+        }
+
+        function openPageSetupModal() {
+            _seedPageSetupForm(loadPageSetup());
+            _psPreviewState.pageNumber = 1;
+            // Scope is a transient choice (not persisted) — start at
+            // "current sheet" every open, and refresh the "Selected cells"
+            // label with the live A1 range when a selection exists.
+            _refreshScopeOptionLabel();
+            document.getElementById('psPrintScope').value = 'current';
+            document.getElementById('pageSetupModal').style.display = 'flex';
+            // Defer to next tick so the modal lays out first — without
+            // it, _fitPsPreviewToWidth() reads a zero wrap.clientWidth
+            // and the canvas comes out tiny.
+            setTimeout(() => {
+                _renderPsPreview().then(() => {
+                    // Auto-fit to width on first open so the preview
+                    // fills the available space straight away.
+                    _fitPsPreviewToWidth();
+                });
+            }, 50);
+        }
+        function closePageSetupModal() {
+            document.getElementById('pageSetupModal').style.display = 'none';
+            clearTimeout(_psPreviewState.timer);
+            // The active pdf lives in the cache — _pdfCacheClearAll
+            // destroys everything in one shot. Skip the legacy
+            // .pdf.destroy() so we don't double-free.
+            _psPreviewState.pdf = null;
+            _pdfCacheClearAll();
+        }
+
+        function _savePageSetupFromForm() {
+            const state = _readPageSetupFromForm();
             _persistPageSetup(state);
             closePageSetupModal();
         }
@@ -2972,10 +3768,133 @@
             _seedPageSetupForm({ ...PAGE_SETUP_DEFAULTS });
         }
 
+        // Pulls the user's current selection in the Univer sheet and
+        // formats it as an A1 range string like "A1:G33". Returns null
+        // if no workbook is mounted or no range is selected.
+        function _getUniverActiveRangeA1() {
+            const api = sheetState.univerAPI;
+            if (!api) return null;
+            const wb = api.getActiveWorkbook && api.getActiveWorkbook();
+            if (!wb) return null;
+            const sheet = wb.getActiveSheet && wb.getActiveSheet();
+            if (!sheet || !sheet.getActiveRange) return null;
+            const range = sheet.getActiveRange();
+            if (!range || !range.getRange) return null;
+            const r = range.getRange();
+            if (!r || r.startRow == null) return null;
+            return _colIdxToLetter(r.startColumn) + (r.startRow + 1)
+                + ':' + _colIdxToLetter(r.endColumn) + (r.endRow + 1);
+        }
+
+        function _fillPrintAreaFromSelection() {
+            const a1 = _getUniverActiveRangeA1();
+            if (!a1) {
+                alert('ยังไม่มี selection — กรุณาเปิด workbook และลากคลุมพื้นที่ก่อน');
+                return;
+            }
+            document.getElementById('psPrintArea').value = a1;
+        }
+
+        // Mirror Google Sheets' "Selected cells (B2:F10)" label — when the
+        // user has an active selection, surface the A1 range in the option
+        // text so it's obvious what would get printed. Falls back to a
+        // disabled-looking suffix when there's no selection to capture.
+        function _refreshScopeOptionLabel() {
+            const sel = document.getElementById('psPrintScope');
+            if (!sel) return;
+            const opt = sel.querySelector('option[value="selection"]');
+            if (!opt) return;
+            const a1 = _getUniverActiveRangeA1();
+            opt.textContent = a1 ? `เซลล์ที่เลือก (${a1})` : 'เซลล์ที่เลือก';
+            opt.disabled = !a1;
+        }
+
+        // Scope dropdown change handler — picking "Selected cells" pulls
+        // the current Univer selection straight into the Print Area input
+        // so the rest of the print pipeline (which already honours
+        // printArea) just works. Reverts to "current" on failure.
+        //
+        // Scope changes are major (different total page count, possibly
+        // different printable region) — skip the 400ms debounce that the
+        // typing-driven listener uses, reset to page 1 of the upcoming
+        // preview, and trigger an immediate rebuild so the user sees the
+        // new content right away instead of the old preview lingering.
+        //
+        // stopPropagation prevents the sidebar's blanket "change" listener
+        // (which calls _schedulePsPreview) from also firing — otherwise
+        // the preview gets built twice for one click (immediate + 400ms),
+        // visible as a flicker.
+        function _onScopeChange(e) {
+            if (e && typeof e.stopPropagation === 'function') {
+                e.stopPropagation();
+            }
+            const sel = document.getElementById('psPrintScope');
+            if (!sel) return;
+            if (sel.value === 'selection') {
+                const a1 = _getUniverActiveRangeA1();
+                if (!a1) {
+                    alert('ยังไม่มี selection — กรุณาเปิด workbook และลากคลุมพื้นที่ก่อน');
+                    sel.value = 'current';
+                    return;
+                }
+                document.getElementById('psPrintArea').value = a1;
+            } else if (sel.value === 'current') {
+                // Switching back to "current sheet" clears the captured
+                // selection so the scope choice actually means something.
+                document.getElementById('psPrintArea').value = '';
+            }
+            // Reset page nav + kick the build immediately rather than
+            // waiting for the 400ms typing debounce. Skip the explicit
+            // "loading" status — _renderPsPreview only shows it on a
+            // cache miss, so cache hits feel instant instead of flashing
+            // a loading message for one frame.
+            _psPreviewState.pageNumber = 1;
+            clearTimeout(_psPreviewState.timer);
+            _renderPsPreview();
+        }
+
+        // "Next" mirrors Google Sheets' two-step flow: save the settings
+        // and immediately kick off Print so the user goes from preview →
+        // PDF tab without an extra click.
+        async function _saveAndPrintFromPageSetup() {
+            _savePageSetupFromForm();
+            // Defer so the modal close paints before the (potentially)
+            // slow print pipeline kicks in.
+            setTimeout(() => printSheetToPdf(), 50);
+        }
+
         document.getElementById('psSaveBtn').addEventListener('click', _savePageSetupFromForm);
+        document.getElementById('psNextBtn').addEventListener('click', _saveAndPrintFromPageSetup);
         document.getElementById('psCancelBtn').addEventListener('click', closePageSetupModal);
         document.getElementById('psCloseBtn').addEventListener('click', closePageSetupModal);
-        document.getElementById('psResetBtn').addEventListener('click', _resetPageSetupForm);
+        document.getElementById('psResetBtn').addEventListener('click', () => {
+            _resetPageSetupForm();
+            _schedulePsPreview();
+        });
+        document.getElementById('psUseSelectionBtn').addEventListener('click', () => {
+            _fillPrintAreaFromSelection();
+            _schedulePsPreview();
+        });
+        document.getElementById('psPrintScope').addEventListener('change', _onScopeChange);
+        document.getElementById('psNavPrev').addEventListener('click', () => _gotoPsPage(-1));
+        document.getElementById('psNavNext').addEventListener('click', () => _gotoPsPage(+1));
+        document.getElementById('psNavFit').addEventListener('click', _fitPsPreviewToWidth);
+        // Margin / Scaling preset dropdowns drive the hidden carrier
+        // fields + show/hide the custom sub-forms.
+        document.getElementById('psMarginPreset').addEventListener('change', (e) => {
+            _applyMarginPreset(e.target.value);
+        });
+        document.getElementById('psScalingPreset').addEventListener('change', (e) => {
+            _applyScalingPreset(e.target.value);
+        });
+        // Live preview — every input / change inside the modal form
+        // (anywhere inside the sidebar) triggers a debounced re-render.
+        // Scoped to the sidebar so page-nav clicks don't re-render.
+        const _psSidebar = document.querySelector('#pageSetupModal .ps-google-sidebar');
+        if (_psSidebar) {
+            _psSidebar.addEventListener('input', _schedulePsPreview);
+            _psSidebar.addEventListener('change', _schedulePsPreview);
+        }
         // Click-outside-to-close: only when the overlay itself (not the
         // card) is clicked. Prevents accidental close while interacting
         // with form fields.
@@ -3029,18 +3948,45 @@
             return out;
         }
 
+        // Parse an A1-style range "A1:G100" → 0-based half-open bounds.
+        // Returns null on bad / empty input so callers can fall back to
+        // the full populated range.
+        function _parsePrintArea(text) {
+            if (!text) return null;
+            const m = String(text).trim().toUpperCase()
+                .match(/^([A-Z]+)(\d+):([A-Z]+)(\d+)$/);
+            if (!m) return null;
+            const cStart = _letterToColIdx(m[1]);
+            const cEnd = _letterToColIdx(m[3]);
+            const rStart = parseInt(m[2], 10) - 1;
+            const rEnd = parseInt(m[4], 10) - 1;
+            if (cStart < 0 || cEnd < 0 || rStart < 0 || rEnd < 0) return null;
+            return {
+                minR: Math.min(rStart, rEnd),
+                maxR: Math.max(rStart, rEnd),
+                minC: Math.min(cStart, cEnd),
+                maxC: Math.max(cStart, cEnd),
+            };
+        }
+
         // Chunk the column indices into groups that each fit within
         // `printableWidthMm`. Walks left→right, accumulating widths, and
         // cuts a new chunk every time the next column would overflow.
         // Single overflow-wider-than-page columns get their own chunk
         // (autoTable will then size them down to fit the page).
         function _splitColumnsForPages(widthsMm, printableWidthMm) {
+            // 0.5mm slack absorbs the floating-point spillover that
+            // creeps in when callers compute scale = printableW / totalW
+            // and the multiplication round-trip lands a hair > printable
+            // (e.g. 14 cols × 12.428mm = 174.009 vs 174mm printable).
+            // Without it, fit-to-N-wide silently produces N+1 chunks.
+            const limit = printableWidthMm + 0.5;
             const chunks = [];
             let current = [];
             let currentW = 0;
             for (let c = 0; c < widthsMm.length; c++) {
                 const w = widthsMm[c];
-                if (current.length > 0 && currentW + w > printableWidthMm) {
+                if (current.length > 0 && currentW + w > limit) {
                     chunks.push(current);
                     current = [];
                     currentW = 0;
@@ -3065,16 +4011,26 @@
         // into multiple pages the same way Excel does by default — col
         // groups go on separate pages instead of being scaled down to
         // unreadable widths.
-        async function printSheetToPdf() {
+        // psOverride: when set (typically the live form state for the
+        // Page Setup preview), use this instead of the persisted setup.
+        // returnBlobOnly: when true, return the rendered PDF blob and
+        // skip the overlay / window.open / download flow. Used by the
+        // preview iframe inside the Page Setup modal.
+        async function printSheetToPdf(psOverride, returnBlobOnly) {
             const snapshot = getCurrentUniverSnapshot();
             if (!snapshot || !snapshot.sheets) {
+                if (returnBlobOnly) return null;
                 alert('ยังไม่มี workbook ให้พิมพ์');
                 return;
             }
             try {
-                setSheetOverlay(true, 'กำลังโหลด jsPDF + ฟอนต์ไทย (~370 KB)...');
+                if (!returnBlobOnly) {
+                    setSheetOverlay(true, 'กำลังโหลด jsPDF + ฟอนต์ไทย (~370 KB)...');
+                }
                 await loadJsPdfAssets();
-                setSheetOverlay(true, 'กำลังสร้าง PDF...');
+                if (!returnBlobOnly) {
+                    setSheetOverlay(true, 'กำลังสร้าง PDF...');
+                }
 
                 const sheetId = (snapshot.sheetOrder && snapshot.sheetOrder[0])
                     || Object.keys(snapshot.sheets)[0];
@@ -3082,9 +4038,11 @@
                 const cellData = (sheet && sheet.cellData) || {};
                 const workbookStyles = snapshot.styles || {};
 
+                const ps = psOverride || loadPageSetup();
+
                 // Bounding range — only emit cells inside the populated
                 // region so we don't print 200 empty rows after the data.
-                let maxR = -1, maxC = -1;
+                let minR = 0, minC = 0, maxR = -1, maxC = -1;
                 for (const r in cellData) {
                     if (!Object.prototype.hasOwnProperty.call(cellData, r)) continue;
                     const ri = +r;
@@ -3102,8 +4060,25 @@
                     }
                 }
                 if (maxR < 0 || maxC < 0) {
+                    if (returnBlobOnly) return null;
                     alert('Sheet ว่างเปล่า');
                     return;
+                }
+                // Print Area override — if the user typed a range like
+                // "A1:G100", clamp the bounds to it (still capped by the
+                // populated region so we don't try to print cells past
+                // the last data row).
+                const pa = _parsePrintArea(ps.printArea);
+                if (pa) {
+                    minR = Math.max(0, pa.minR);
+                    minC = Math.max(0, pa.minC);
+                    maxR = Math.min(maxR, pa.maxR);
+                    maxC = Math.min(maxC, pa.maxC);
+                    if (maxR < minR || maxC < minC) {
+                        if (returnBlobOnly) return null;
+                        alert('พื้นที่พิมพ์ (Print Area) อยู่นอกข้อมูลที่มี');
+                        return;
+                    }
                 }
 
                 // Build a (row,col) → merge info map so the row builder
@@ -3165,7 +4140,6 @@
                     return out;
                 };
 
-                const ps = loadPageSetup();
                 // Headers/footers steal vertical space — reserve them in
                 // the margin so autoTable doesn't draw rows under them.
                 const headerSpace = ps.header ? 12 : 0;
@@ -3200,45 +4174,116 @@
                 const headerSub = (dateRange ? `ช่วงวันที่ ${dateRange} · ` : '')
                     + `พิมพ์เมื่อ ${new Date().toLocaleString('th-TH')}`;
 
-                // Excel-style horizontal page splitting: chunk the columns
-                // by the page's printable width and render one autoTable
-                // per chunk. Each chunk gets its own page break, so a 14-
-                // column report on A4 portrait prints as columns A-G on
-                // page 1 + columns H-N on page 2 (exactly what File →
-                // Print does in Excel without a "Fit to width" override).
-                const colWidthsMm = _getUniverColumnWidthsMm(sheet, maxC);
+                // Print-area-clamped column index range. _getUniverColumn
+                // WidthsMm always returns widths starting at col 0 — slice
+                // off the un-printed prefix when minC > 0.
+                const allColWidthsMm = _getUniverColumnWidthsMm(sheet, maxC);
+                const colWidthsMm = allColWidthsMm.slice(minC);
                 const paperW = _paperWidthMm(ps.paperSize, ps.orientation);
                 const printableW = Math.max(
                     10, paperW - ps.marginLeft - ps.marginRight);
-                const colChunks = _splitColumnsForPages(colWidthsMm, printableW);
+
+                // #1 Scaling — Excel "Page Setup → Page" tab equivalent.
+                // 'full'   = 100%, chunk wide tables horizontally.
+                // 'fit'    = compute a uniform scale so the table fits in
+                //            ps.fitWide pages wide (and optionally
+                //            ps.fitTall pages tall — vertical fit is best-
+                //            effort: we'd need to know per-row height to
+                //            be exact, fall back to font scaling proportion
+                //            of fitTall when set).
+                // 'percent'= user-typed scalePercent (10..400).
+                let scale = 1;
+                if (ps.scaling === 'percent') {
+                    scale = Math.max(0.1, Math.min(4, (ps.scalePercent || 100) / 100));
+                } else if (ps.scaling === 'fit') {
+                    const totalW = colWidthsMm.reduce((s, w) => s + w, 0);
+                    const wideScale = printableW * (ps.fitWide || 1) / Math.max(1, totalW);
+                    scale = Math.min(1, wideScale);
+                }
+                const scaledColWidths = colWidthsMm.map(w => w * scale);
+                const fontSize = Math.max(4, 9 * scale);
+                const cellPadding = Math.max(0.4, 1.6 * scale);
+
+                // #2 Print Titles — the row/col range that should appear
+                // on every printed page. Stored 1-based; convert to 0-
+                // based here. Also intersect with the print-area-clamped
+                // window so a repeat that lives outside the print area
+                // is dropped silently.
+                const repeatRowFirst = ps.repeatRowStart > 0
+                    ? Math.max(minR, ps.repeatRowStart - 1) : -1;
+                const repeatRowLast = ps.repeatRowEnd > 0
+                    ? Math.min(maxR, ps.repeatRowEnd - 1) : -1;
+                const hasRepeatRows = repeatRowFirst >= 0 && repeatRowLast >= repeatRowFirst;
+                const repeatColFirst = ps.repeatColStart > 0
+                    ? Math.max(minC, ps.repeatColStart - 1) : -1;
+                const repeatColLast = ps.repeatColEnd > 0
+                    ? Math.min(maxC, ps.repeatColEnd - 1) : -1;
+                const hasRepeatCols = repeatColFirst >= 0 && repeatColLast >= repeatColFirst;
+                const repeatCols = hasRepeatCols
+                    ? Array.from({ length: repeatColLast - repeatColFirst + 1 },
+                        (_, i) => repeatColFirst + i)
+                    : [];
+                const repeatColsWidthMm = repeatCols
+                    .reduce((s, c) => s + (scaledColWidths[c - minC] || 0), 0);
+
+                // The set of body columns (non-repeating). Repeat cols
+                // prepend to every chunk so they appear on every page.
+                const bodyCols = [];
+                for (let c = minC; c <= maxC; c++) {
+                    if (hasRepeatCols && c >= repeatColFirst && c <= repeatColLast) continue;
+                    bodyCols.push(c);
+                }
+                const bodyColWidthsMm = bodyCols.map(
+                    c => scaledColWidths[c - minC]);
+                const splitterPrintableW = Math.max(
+                    10, printableW - repeatColsWidthMm);
+                const bodyChunks = _splitColumnsForPages(
+                    bodyColWidthsMm, splitterPrintableW);
+                const colChunks = bodyChunks.map(chunk => [
+                    ...repeatCols,
+                    ...chunk.map(idxInBody => bodyCols[idxInBody]),
+                ]);
+                // Guard: empty workbook after slicing — still emit one
+                // empty chunk so we don't crash on doc.output.
+                if (colChunks.length === 0) colChunks.push([...repeatCols]);
+
+                // Repeat-rows form the autoTable head (autoTable repeats
+                // head section on every page automatically). Non-repeat
+                // rows go to body. When the user hasn't set Print Titles,
+                // fall back to the previous behaviour: row minR alone is
+                // the head, everything after is body.
+                const headRowsRange = hasRepeatRows
+                    ? { start: repeatRowFirst, end: repeatRowLast }
+                    : { start: minR, end: minR };
+                const bodyRowsList = [];
+                for (let r = minR; r <= maxR; r++) {
+                    if (r >= headRowsRange.start && r <= headRowsRange.end) continue;
+                    bodyRowsList.push(r);
+                }
 
                 colChunks.forEach((chunkCols, chunkIdx) => {
                     if (chunkIdx > 0) doc.addPage();
-                    const chunkHead = [buildRowForChunk(0, chunkCols)];
-                    const chunkBody = [];
-                    for (let r = 1; r <= maxR; r++) {
-                        chunkBody.push(buildRowForChunk(r, chunkCols));
+                    const chunkHead = [];
+                    for (let r = headRowsRange.start; r <= headRowsRange.end; r++) {
+                        chunkHead.push(buildRowForChunk(r, chunkCols));
                     }
+                    const chunkBody = bodyRowsList.map(
+                        r => buildRowForChunk(r, chunkCols));
                     // Pre-set columnStyles so each PDF column matches the
-                    // source column's exact width. Without this autoTable
-                    // would auto-fit each chunk independently and the
-                    // widths would drift between chunks.
+                    // source column's exact (scaled) width. Without this
+                    // autoTable would auto-fit each chunk independently
+                    // and widths would drift between chunks.
                     const columnStyles = {};
                     chunkCols.forEach((srcCol, dstCol) => {
-                        columnStyles[dstCol] = { cellWidth: colWidthsMm[srcCol] };
+                        columnStyles[dstCol] = { cellWidth: scaledColWidths[srcCol - minC] };
                     });
                     doc.autoTable({
                         head: chunkHead,
                         body: chunkBody,
-                        // 'grid' = borders + no zebra striping. The default
-                        // 'striped' theme paints alternating row fills that
-                        // make every other row look like it has a real bg,
-                        // even when the source workbook is pure white — the
-                        // user-reported "พื้นหลังขึ้นเอง" symptom.
                         theme: 'grid',
                         startY: ps.marginTop + headerSpace,
                         styles: {
-                            font: 'THSarabun', fontSize: 9, cellPadding: 1.6,
+                            font: 'THSarabun', fontSize, cellPadding,
                             overflow: 'linebreak', valign: 'top',
                             lineColor: [180, 180, 180], lineWidth: 0.1,
                             fillColor: false,
@@ -3274,10 +4319,6 @@
                                 doc.setFont('THSarabun', 'normal');
                                 doc.setFontSize(8);
                                 doc.setTextColor(100, 116, 139);
-                                // When there are multiple column chunks, show
-                                // "หน้า 1 / N (กลุ่มคอลัมน์ 2/3)" so the user
-                                // can identify which horizontal slice is on
-                                // each page when reassembling the printout.
                                 const chunkLabel = colChunks.length > 1
                                     ? ` (กลุ่มคอลัมน์ ${chunkIdx + 1}/${colChunks.length})`
                                     : '';
@@ -3291,22 +4332,27 @@
                         },
                         didParseCell: (data) => {
                             // Map autoTable's local indices back to the
-                            // source workbook's (row, col) so the cell
-                            // style lookup hits the right cellData entry.
-                            // Without this, the second chunk would resolve
-                            // col 0 to Univer col 0 even though it should
-                            // be col 7 (start of the chunk).
+                            // source workbook's (row, col). Head rows
+                            // come from headRowsRange; body rows from
+                            // bodyRowsList. Cols come from chunkCols.
                             const r = data.section === 'head'
-                                ? 0
-                                : data.row.index + 1;
+                                ? headRowsRange.start + data.row.index
+                                : bodyRowsList[data.row.index];
                             const c = chunkCols[data.column.index];
                             const cell = (cellData[r] && cellData[r][c]) || null;
                             const us = resolveUniverStyle(cell);
                             if (!us) return;
-                            const bg = _hexToRgbArray(us.bg && us.bg.rgb);
-                            if (bg) data.cell.styles.fillColor = bg;
-                            const cl = _hexToRgbArray(us.cl && us.cl.rgb);
-                            if (cl) data.cell.styles.textColor = cl;
+                            // #4 Black & White: skip fill + text colour
+                            // overrides so the cell stays white-on-black.
+                            // Borders + bold/italic + alignment still
+                            // come through so the structure reads OK on
+                            // a mono printer.
+                            if (!ps.blackAndWhite) {
+                                const bg = _hexToRgbArray(us.bg && us.bg.rgb);
+                                if (bg) data.cell.styles.fillColor = bg;
+                                const cl = _hexToRgbArray(us.cl && us.cl.rgb);
+                                if (cl) data.cell.styles.textColor = cl;
+                            }
                             if (us.bl && us.it) data.cell.styles.fontStyle = 'bolditalic';
                             else if (us.bl) data.cell.styles.fontStyle = 'bold';
                             else if (us.it) data.cell.styles.fontStyle = 'italic';
@@ -3328,6 +4374,7 @@
                 });
 
                 const blob = doc.output('blob');
+                if (returnBlobOnly) return blob;
                 const url = URL.createObjectURL(blob);
                 const baseName = (sheet.name || 'Sheet1')
                     .replace(/[^\w฀-๿]+/g, '_') || 'Sheet';
@@ -3360,9 +4407,10 @@
                 setTimeout(() => URL.revokeObjectURL(url), 10000);
             } catch (e) {
                 console.error(e);
+                if (returnBlobOnly) return null;
                 alert('สร้าง PDF ไม่สำเร็จ: ' + (e && e.message || e));
             } finally {
-                setSheetOverlay(false);
+                if (!returnBlobOnly) setSheetOverlay(false);
             }
         }
 
@@ -3525,6 +4573,33 @@
             })();
             return jsPdfState.loadingPromise.catch(err => {
                 jsPdfState.loadingPromise = null;
+                throw err;
+            });
+        }
+
+        // ===== PDF.js lazy-loader =====
+        // Renders generated PDF pages into <canvas> elements so we can
+        // build a Google-Sheets-style print preview (own toolbar, margin
+        // overlay, page nav) instead of leaving the Chrome PDF plugin in
+        // charge. Bundle (~500 KB) + worker fetched on first Page Setup
+        // open after entering Sheet view.
+        const PDFJS_URL = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js';
+        const PDFJS_WORKER_URL = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
+        const pdfJsState = { loaded: false, loadingPromise: null };
+
+        function loadPdfJsAssets() {
+            if (pdfJsState.loaded) return Promise.resolve();
+            if (pdfJsState.loadingPromise) return pdfJsState.loadingPromise;
+            pdfJsState.loadingPromise = (async () => {
+                await _loadUniverScript(PDFJS_URL);
+                if (!window.pdfjsLib) {
+                    throw new Error('pdfjsLib global missing after script load');
+                }
+                window.pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS_WORKER_URL;
+                pdfJsState.loaded = true;
+            })();
+            return pdfJsState.loadingPromise.catch(err => {
+                pdfJsState.loadingPromise = null;
                 throw err;
             });
         }
