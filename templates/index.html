@@ -3277,20 +3277,24 @@
         }
 
         // Excel border style names (xl/styles.xml) → Univer BorderStyleTypes
-        // numeric values. Univer's actual enum (from @univerjs/core):
-        //   1=THIN, 2=HAIR, 3=DOTTED, 4=DASHED, 5=DOUBLE,
-        //   6=MEDIUM_DASHED, 7=MEDIUM_DASH_DOT, 8=MEDIUM_DASH_DOT_DOT,
-        //   9=SLANT_DASH_DOT, 10=MEDIUM, 11=THICK,
-        //   12=DASH_DOT, 13=DASH_DOT_DOT
-        // Notable: MEDIUM is 10 (not 6) and the dashed variants of MEDIUM
-        // occupy 6-8 — easy to mis-map, which made Excel "medium" borders
-        // render as medium-dashed in earlier versions of this code.
+        // numeric values. Univer's actual enum (verified at runtime against
+        // window.UniverCore.BorderStyleTypes in 0.22.1):
+        //   1=THIN, 2=HAIR, 3=DOTTED, 4=DASHED,
+        //   5=DASH_DOT, 6=DASH_DOT_DOT, 7=DOUBLE,
+        //   8=MEDIUM, 9=MEDIUM_DASHED,
+        //   10=MEDIUM_DASH_DOT, 11=MEDIUM_DASH_DOT_DOT,
+        //   12=SLANT_DASH_DOT, 13=THICK
+        // Notable: this differs from the @univerjs/core doc tables — verify
+        // by inspecting window.UniverCore.BorderStyleTypes after a Univer
+        // version bump if borders ever look "off" again. Excel "medium" and
+        // "thick" being mis-mapped is the symptom that exposes a drift.
         // Unknown styles fall back to THIN.
         const _EXCEL_BORDER_STYLE_TO_UNIVER = {
-            thin: 1, hair: 2, dotted: 3, dashed: 4, double: 5,
-            mediumDashed: 6, mediumDashDot: 7, mediumDashDotDot: 8,
-            slantDashDot: 9, medium: 10, thick: 11,
-            dashDot: 12, dashDotDot: 13,
+            thin: 1, hair: 2, dotted: 3, dashed: 4,
+            dashDot: 5, dashDotDot: 6, double: 7,
+            medium: 8, mediumDashed: 9,
+            mediumDashDot: 10, mediumDashDotDot: 11,
+            slantDashDot: 12, thick: 13,
         };
 
         // Excel uses 8-char ARGB ("FF000000") — Univer wants 6-char hex
