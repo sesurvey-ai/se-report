@@ -301,17 +301,23 @@
         }
         .se-file-ops button {
             display: inline-flex; align-items: center; gap: 5px;
-            padding: 3px 8px;
+            padding: 5px 7px;
             font-size: 12px;
-            border: 1px solid #cbd5e1;
+            border: 1px solid transparent;
             border-radius: 4px;
             background: transparent;
             color: #1e293b;
             cursor: pointer;
             font-family: inherit;
             line-height: 1.4;
+            transition: background 0.12s;
         }
-        .se-file-ops button:hover { background: #f1f5f9; }
+        /* Borderless at rest, soft slate fill on hover — mirrors the
+           Univer ribbon's own toolbar buttons (sitting just to the
+           right) so the file-ops row reads as part of the same toolbar. */
+        .se-file-ops button:hover {
+            background: #f1f5f9;
+        }
         .se-file-ops button svg {
             width: 16px; height: 16px;
             display: block; flex-shrink: 0;
@@ -321,10 +327,131 @@
         /* Save / Save XLSX get colored icons + a transparent button so the
            icon carries the visual weight (no more blue-filled Save). */
         .se-file-ops button[data-op="save"] svg { color: #2563eb; }
-        .se-file-ops button[data-op="savexlsx"] svg { color: #16a34a; }
+        /* Save As shares the blue palette with Save (same operation
+           family) — just a lighter shade to hint at the secondary role. */
+        .se-file-ops button[data-op="saveas"] svg { color: #60a5fa; }
+        /* New workbook — neutral slate (it's not a destructive nor a
+           save-family action; same visual weight as Open). */
+        .se-file-ops button[data-op="new"] svg { color: #475569; }
+        /* Page Setup — same slate as Print so they read as a pair. */
+        .se-file-ops button[data-op="pagesetup"] svg { color: #475569; }
+
+        /* ---- Page Setup modal --------------------------------------
+           Centered overlay over the whole viewport. Light-only — the
+           Sheet view is force-light (see #spreadsheetView color override)
+           so we don't carry the app's dark theme into the modal either. */
+        .modal-overlay {
+            position: fixed; inset: 0;
+            background: rgba(15, 23, 42, 0.5);
+            display: flex; align-items: center; justify-content: center;
+            z-index: 1000;
+            padding: 16px;
+            font-family: 'Segoe UI', Tahoma, sans-serif;
+            color: #1e293b;
+        }
+        .modal-card {
+            background: #fff;
+            border-radius: 8px;
+            width: 100%; max-width: 460px;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.3);
+            font-size: 14px;
+            max-height: 90vh;
+            display: flex; flex-direction: column;
+        }
+        .modal-header {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 14px 18px;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        .modal-header h3 {
+            margin: 0; font-size: 15px; font-weight: 600;
+        }
+        .modal-close {
+            background: none; border: none;
+            font-size: 22px; line-height: 1; cursor: pointer;
+            color: #64748b; padding: 0 4px;
+        }
+        .modal-close:hover { color: #1e293b; }
+        .modal-body {
+            padding: 14px 18px;
+            overflow: auto;
+        }
+        .modal-body .form-row {
+            margin-bottom: 14px;
+            display: flex; flex-direction: column; gap: 6px;
+        }
+        .modal-body .form-row > label.field-label {
+            font-size: 12px; color: #475569; font-weight: 600;
+            text-transform: uppercase; letter-spacing: 0.3px;
+        }
+        .modal-body select,
+        .modal-body input[type=number] {
+            padding: 6px 8px; font-size: 13px; font-family: inherit;
+            border: 1px solid #cbd5e1; border-radius: 4px;
+            background: #fff; color: #1e293b;
+        }
+        .modal-body select:focus,
+        .modal-body input[type=number]:focus {
+            outline: none; border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59,130,246,0.2);
+        }
+        .modal-body .radio-group { display: flex; gap: 16px; }
+        .modal-body .radio-group label {
+            display: inline-flex; align-items: center; gap: 6px;
+            font-weight: normal; cursor: pointer; font-size: 13px;
+        }
+        .modal-body .margins-grid {
+            display: grid; grid-template-columns: 1fr 1fr;
+            gap: 8px 14px;
+        }
+        .modal-body .margins-grid label {
+            display: flex; align-items: center; gap: 6px;
+            font-size: 13px; font-weight: normal;
+        }
+        .modal-body .margins-grid input { width: 60px; }
+        .modal-body .check-row {
+            display: flex; align-items: center; gap: 8px;
+            font-size: 13px; font-weight: normal;
+        }
+        .modal-footer {
+            display: flex; justify-content: space-between; gap: 8px;
+            padding: 12px 18px;
+            border-top: 1px solid #e2e8f0;
+        }
+        .modal-footer .footer-right { display: flex; gap: 8px; margin-left: auto; }
+        .modal-btn {
+            padding: 6px 14px; font-size: 13px; border-radius: 4px;
+            cursor: pointer; font-family: inherit; line-height: 1.4;
+        }
+        .modal-btn.primary {
+            background: #2563eb; color: #fff; border: 1px solid #1d4ed8;
+        }
+        .modal-btn.primary:hover { background: #1d4ed8; }
+        .modal-btn.secondary {
+            background: #fff; color: #475569; border: 1px solid #cbd5e1;
+        }
+        .modal-btn.secondary:hover { background: #f1f5f9; }
         /* Print button — neutral slate so it doesn't compete with the
            coloured save/refresh icons. */
         .se-file-ops button[data-op="print"] svg { color: #475569; }
+        /* Currently-open filename sits next to the saved/unsaved indicator
+           in the Univer tab bar (see injectCrosshairTab). Tucked under the
+           absolute-positioned indicator wrapper so it tracks the status
+           pill on the left edge. Ellipsis-truncated; full name in tooltip. */
+        #sheetFileName {
+            display: inline-block;
+            max-width: 220px;
+            padding: 1px 8px;
+            font-size: 12px;
+            color: #475569;
+            background: #f1f5f9;
+            border-radius: 4px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            vertical-align: middle;
+            font-family: ui-monospace, 'SF Mono', Consolas, monospace;
+        }
         /* Status indicator lives in the Univer tab bar but is pinned to
            the LEFT edge with absolute positioning so it visually sits
            above the "ข้อมูล" refresh button (which is the leftmost item
@@ -418,13 +545,19 @@
            Open button lives in the Univer ribbon which only renders once a
            workbook is mounted — chicken-and-egg without this). */
         .sheet-empty-open-btn {
-            display: inline-block; margin: 12px 0 0;
+            display: inline-block; margin: 12px 4px 0;
             padding: 6px 18px; font-size: 13px; font-family: inherit;
             background: #2563eb; color: #fff;
             border: 1px solid #1d4ed8; border-radius: 4px;
             cursor: pointer; line-height: 1.4;
         }
         .sheet-empty-open-btn:hover { background: #1d4ed8; }
+        /* Secondary variant for "New blank workbook" — less prominent
+           since loading an existing file is the more common path here. */
+        .sheet-empty-open-btn.secondary {
+            background: #64748b; border-color: #475569;
+        }
+        .sheet-empty-open-btn.secondary:hover { background: #475569; }
 
         /* Pivot dark theme */
         #pivotView { overflow: auto; }
@@ -1091,6 +1224,58 @@
         </div>
     </div>
 
+    <!-- Page Setup modal — hidden by default; openPageSetupModal() shows
+         it and seeds the inputs from localStorage. Values flow back the
+         other way through savePageSetupFromForm() on the Save button. -->
+    <div id="pageSetupModal" class="modal-overlay" style="display:none">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h3>ตั้งค่าหน้ากระดาษ (สำหรับพิมพ์ Sheet view)</h3>
+                <button class="modal-close" type="button" id="psCloseBtn" title="ปิด">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-row">
+                    <label class="field-label">ขนาดกระดาษ</label>
+                    <select id="psPaperSize">
+                        <option value="a4">A4 (210 × 297 mm)</option>
+                        <option value="a3">A3 (297 × 420 mm)</option>
+                        <option value="a5">A5 (148 × 210 mm)</option>
+                        <option value="letter">Letter (216 × 279 mm)</option>
+                        <option value="legal">Legal (216 × 356 mm)</option>
+                    </select>
+                </div>
+                <div class="form-row">
+                    <label class="field-label">แนวกระดาษ</label>
+                    <div class="radio-group">
+                        <label><input type="radio" name="psOri" value="portrait"> แนวตั้ง (Portrait)</label>
+                        <label><input type="radio" name="psOri" value="landscape"> แนวนอน (Landscape)</label>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <label class="field-label">ระยะขอบ (mm)</label>
+                    <div class="margins-grid">
+                        <label>บน <input type="number" id="psMarginTop" min="0" max="50" step="1"></label>
+                        <label>ล่าง <input type="number" id="psMarginBottom" min="0" max="50" step="1"></label>
+                        <label>ซ้าย <input type="number" id="psMarginLeft" min="0" max="50" step="1"></label>
+                        <label>ขวา <input type="number" id="psMarginRight" min="0" max="50" step="1"></label>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <label class="field-label">หัว/ท้ายกระดาษ</label>
+                    <label class="check-row"><input type="checkbox" id="psHeader"> แสดงหัวกระดาษ (ชื่อ sheet + ช่วงวันที่)</label>
+                    <label class="check-row"><input type="checkbox" id="psFooter"> แสดงเลขหน้าด้านล่าง (หน้า X / Y)</label>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="modal-btn secondary" id="psResetBtn">รีเซ็ตค่าเริ่มต้น</button>
+                <div class="footer-right">
+                    <button type="button" class="modal-btn secondary" id="psCancelBtn">ยกเลิก</button>
+                    <button type="button" class="modal-btn primary" id="psSaveBtn">บันทึก</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script>
         const COLUMN_MAP = {{ column_map | tojson }};
         const FILTER_SVG = `<svg class="filter-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>`;
@@ -1672,7 +1857,14 @@
                 else sidebar.classList.remove('collapsed');
             }
             if (view === 'pivot' && lastRecords) buildPivot();
-            if (view === 'spreadsheet') enterSpreadsheetTab();
+            if (view === 'spreadsheet') {
+                enterSpreadsheetTab();
+                // Warm up jsPDF + Sarabun in the background so the user's
+                // first Print click doesn't trigger a 370 KB fetch inside
+                // the click handler (which causes Chrome to popup-block
+                // the resulting window.open).
+                if (typeof preloadPrintAssets === 'function') preloadPrintAssets();
+            }
             updatePivotHScroll();
         }
 
@@ -2278,6 +2470,14 @@
             recordCount: 0,
             colCount: 0,
             crosshairOn: false,      // Crosshair highlight toggle state
+            // File System Access API state. fileHandle stays set across
+            // edits so Save can overwrite the source file 1-click; fileKind
+            // ('json' | 'xlsx') guards against writing a .xlsx blob into a
+            // .se.json handle (and vice versa). null on browsers without
+            // the API or when the workbook was built from a fetch.
+            fileHandle: null,
+            fileName: null,
+            fileKind: null,
         };
 
         // Crosshair highlight is implemented by the @univerjs/sheets-
@@ -2389,16 +2589,24 @@
                 tabBar.style.position = 'relative';
             }
             if (!tabBar.querySelector('#sheetDirtyIndicator')) {
-                const ind = document.createElement('span');
-                ind.id = 'sheetDirtyIndicator';
-                ind.innerHTML = '<span class="status-label">saved</span>';
-                ind.classList.toggle('dirty', !!sheetState.dirty);
-                const labelEl = ind.querySelector('.status-label');
+                // Wrap the indicator + filename in a single absolutely-
+                // positioned container so they move together as one unit
+                // pinned to the left edge of the tab bar.
+                const wrap = document.createElement('span');
+                wrap.id = 'sheetDirtyIndicator';
+                wrap.innerHTML =
+                    '<span class="status-label">saved</span>' +
+                    '<span id="sheetFileName" style="display:none"></span>';
+                wrap.classList.toggle('dirty', !!sheetState.dirty);
+                const labelEl = wrap.querySelector('.status-label');
                 if (labelEl) labelEl.textContent = sheetState.dirty ? 'unsaved' : 'saved';
-                ind.title = sheetState.dirty
+                wrap.title = sheetState.dirty
                     ? 'มีการแก้ไขที่ยังไม่ได้บันทึก'
                     : 'บันทึกแล้ว';
-                tabBar.appendChild(ind);
+                tabBar.appendChild(wrap);
+                // Re-apply the current file label after the wrap is in DOM
+                // so setSheetFile finds #sheetFileName and updates it.
+                setSheetFile(sheetState.fileHandle, sheetState.fileName, sheetState.fileKind);
             }
             if (tabBar.querySelector('.univer-crosshair-tab')) {
                 setCrosshairButtonState();
@@ -2494,16 +2702,35 @@
                 '<rect x="7" y="13" width="10" height="7"/>' +
                 '<path d="M8 3v5h7V3"/>' +
                 '</svg>';
-            // Save-XLSX: document outline with a big "X" centered inside,
-            // evoking the Microsoft Excel file icon while keeping a single-
-            // colour stroke so the .se-file-ops button[data-op=savexlsx]
-            // CSS tint (#16a34a) carries through cleanly.
-            const ICON_XLSX =
+            // New: blank document outline with a "+" inside. Same outer
+            // silhouette as ICON_OPEN/ICON_SAVE_AS so the file-ops family
+            // stays visually consistent.
+            const ICON_NEW =
                 '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
                 '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>' +
                 '<polyline points="14 2 14 8 20 8"/>' +
-                '<line x1="8.5" y1="13" x2="15.5" y2="20"/>' +
-                '<line x1="15.5" y1="13" x2="8.5" y2="20"/>' +
+                '<line x1="9" y1="15" x2="15" y2="15"/>' +
+                '<line x1="12" y1="12" x2="12" y2="18"/>' +
+                '</svg>';
+            // Save As: a smaller floppy disk in the lower-left with an
+            // outward-pointing arrow ↗ in the top-right corner — the
+            // standard "share / export / save elsewhere" idiom. Reads as
+            // "save, then redirect somewhere new" at a glance.
+            const ICON_SAVE_AS =
+                '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+                '<path d="M3 6a2 2 0 0 1 2-2h8l3 3v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6z"/>' +
+                '<rect x="6" y="14" width="8" height="5"/>' +
+                '<path d="M7 4v4h5V4"/>' +
+                '<line x1="15" y1="9" x2="21" y2="3"/>' +
+                '<polyline points="21 9 21 3 15 3"/>' +
+                '</svg>';
+            // Page Setup: gear/cog — universal "settings" affordance.
+            // Same slate tint as Print so the two read as a pair (set
+            // up page → print).
+            const ICON_SETUP =
+                '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+                '<circle cx="12" cy="12" r="3"/>' +
+                '<path d="M12 2v3M12 19v3M4.22 4.22l2.12 2.12M17.66 17.66l2.12 2.12M2 12h3M19 12h3M4.22 19.78l2.12-2.12M17.66 6.34l2.12-2.12"/>' +
                 '</svg>';
             // Print: classic printer silhouette — top sheet, body, output
             // tray. Strokes use currentColor so CSS tints it slate-grey to
@@ -2516,17 +2743,30 @@
                 '</svg>';
             wrap.innerHTML =
                 '<button type="button" data-op="refresh" title="โหลดข้อมูลปัจจุบัน (จาก lastRecords) เข้า workbook">' + ICON_REFRESH + '<span>ข้อมูล</span></button>' +
+                '<button type="button" data-op="new" title="สร้าง workbook ว่าง">' + ICON_NEW + '</button>' +
                 '<button type="button" data-op="open" title="เปิดไฟล์ .se / .se.json หรือ Excel">' + ICON_OPEN + '</button>' +
-                '<button type="button" data-op="save" title="บันทึก workbook เป็นไฟล์ .se.json (เก็บสูตรครบ)">' + ICON_SAVE + '</button>' +
-                '<button type="button" data-op="savexlsx" title="บันทึกเป็น .xlsx (สูตรกลายเป็นค่า)">' + ICON_XLSX + '</button>' +
+                '<button type="button" data-op="save" title="บันทึกทับไฟล์ที่เปิดอยู่">' + ICON_SAVE + '</button>' +
+                '<button type="button" data-op="saveas" title="บันทึกเป็น... (เลือก path / format)">' + ICON_SAVE_AS + '</button>' +
+                '<button type="button" data-op="pagesetup" title="ตั้งค่าหน้ากระดาษ (สำหรับพิมพ์ Sheet view)">' + ICON_SETUP + '</button>' +
                 '<button type="button" data-op="print" title="พิมพ์ (Ctrl+P)">' + ICON_PRINT + '</button>';
+            // Note: #sheetFileName lives next to #sheetDirtyIndicator in
+            // the tab bar (injected by injectCrosshairTab) — not in this
+            // ribbon row — so it visually pairs with the saved/unsaved
+            // status. Buttons here still need their Open/Save/SaveXLSX
+            // tooltips re-synced after this fresh inject, so setSheetFile
+            // gets called at the end (no-op for #sheetFileName here).
             wrap.querySelector('[data-op="refresh"]').addEventListener('click', newFromData);
+            wrap.querySelector('[data-op="new"]').addEventListener('click', newBlankWorkbook);
             wrap.querySelector('[data-op="open"]').addEventListener('click', openSheetFile);
-            wrap.querySelector('[data-op="save"]').addEventListener('click', saveSheetJson);
-            wrap.querySelector('[data-op="savexlsx"]').addEventListener('click', saveSheetXlsx);
+            wrap.querySelector('[data-op="save"]').addEventListener('click', saveCurrent);
+            wrap.querySelector('[data-op="saveas"]').addEventListener('click', saveAs);
+            wrap.querySelector('[data-op="pagesetup"]').addEventListener('click', openPageSetupModal);
             wrap.querySelector('[data-op="print"]').addEventListener('click', printActiveView);
             // Insert as the first grid column of the ribbon row.
             ribbonRow.insertBefore(wrap, ribbonRow.firstChild);
+            // Re-sync the filename label + tooltips after this fresh inject
+            // — Univer may have wiped the previous wrap on tab switch.
+            setSheetFile(sheetState.fileHandle, sheetState.fileName, sheetState.fileKind);
             if (_fileOpsObserver) {
                 try { _fileOpsObserver.disconnect(); } catch {}
             }
@@ -2657,20 +2897,482 @@
             ind.title = flag ? 'มีการแก้ไขที่ยังไม่ได้บันทึก' : 'บันทึกแล้ว';
         }
 
-        // Print the currently active view. Table + Pivot views have proper
-        // @media print rules, but Sheet view (Univer canvas) is hidden when
-        // printing because its canvas-based rendering doesn't print cleanly
-        // — guard against accidental "blank page" prints by telling the
-        // user to switch view (or export to .xlsx + print from Excel).
+        // Page setup persisted in localStorage so the user sets paper
+        // size / orientation / margins / header-footer toggles once and
+        // every subsequent Print uses those values. Versioned key so a
+        // future schema change can ignore old payloads cleanly.
+        const PAGE_SETUP_KEY = 'se_page_setup_v1';
+        // Defaults match Excel's "Normal" margins preset (Top/Bottom
+        // 0.75″ = ~19 mm, Left/Right 0.7″ = ~18 mm) on A4 portrait —
+        // the layout users coming from Office expect when they click
+        // Reset. Header/footer stay off so a default print is the
+        // cleanest possible page.
+        const PAGE_SETUP_DEFAULTS = {
+            paperSize: 'a4',
+            orientation: 'portrait',
+            marginTop: 19, marginBottom: 19,
+            marginLeft: 18, marginRight: 18,
+            header: false, footer: false,
+        };
+
+        function loadPageSetup() {
+            try {
+                const raw = localStorage.getItem(PAGE_SETUP_KEY);
+                if (!raw) return { ...PAGE_SETUP_DEFAULTS };
+                const parsed = JSON.parse(raw);
+                return { ...PAGE_SETUP_DEFAULTS, ...parsed };
+            } catch {
+                return { ...PAGE_SETUP_DEFAULTS };
+            }
+        }
+
+        function _persistPageSetup(state) {
+            try { localStorage.setItem(PAGE_SETUP_KEY, JSON.stringify(state)); }
+            catch (e) { console.warn('localStorage write failed:', e); }
+        }
+
+        function _seedPageSetupForm(state) {
+            document.getElementById('psPaperSize').value = state.paperSize;
+            const oriRadio = document.querySelector(
+                `input[name=psOri][value=${state.orientation}]`);
+            if (oriRadio) oriRadio.checked = true;
+            document.getElementById('psMarginTop').value = state.marginTop;
+            document.getElementById('psMarginBottom').value = state.marginBottom;
+            document.getElementById('psMarginLeft').value = state.marginLeft;
+            document.getElementById('psMarginRight').value = state.marginRight;
+            document.getElementById('psHeader').checked = !!state.header;
+            document.getElementById('psFooter').checked = !!state.footer;
+        }
+
+        function openPageSetupModal() {
+            _seedPageSetupForm(loadPageSetup());
+            document.getElementById('pageSetupModal').style.display = 'flex';
+        }
+        function closePageSetupModal() {
+            document.getElementById('pageSetupModal').style.display = 'none';
+        }
+
+        function _savePageSetupFromForm() {
+            const oriEl = document.querySelector('input[name=psOri]:checked');
+            const state = {
+                paperSize: document.getElementById('psPaperSize').value || 'a4',
+                orientation: (oriEl && oriEl.value) || 'landscape',
+                marginTop: +document.getElementById('psMarginTop').value || 0,
+                marginBottom: +document.getElementById('psMarginBottom').value || 0,
+                marginLeft: +document.getElementById('psMarginLeft').value || 0,
+                marginRight: +document.getElementById('psMarginRight').value || 0,
+                header: document.getElementById('psHeader').checked,
+                footer: document.getElementById('psFooter').checked,
+            };
+            _persistPageSetup(state);
+            closePageSetupModal();
+        }
+
+        function _resetPageSetupForm() {
+            _seedPageSetupForm({ ...PAGE_SETUP_DEFAULTS });
+        }
+
+        document.getElementById('psSaveBtn').addEventListener('click', _savePageSetupFromForm);
+        document.getElementById('psCancelBtn').addEventListener('click', closePageSetupModal);
+        document.getElementById('psCloseBtn').addEventListener('click', closePageSetupModal);
+        document.getElementById('psResetBtn').addEventListener('click', _resetPageSetupForm);
+        // Click-outside-to-close: only when the overlay itself (not the
+        // card) is clicked. Prevents accidental close while interacting
+        // with form fields.
+        document.getElementById('pageSetupModal').addEventListener('click', (e) => {
+            if (e.target.id === 'pageSetupModal') closePageSetupModal();
+        });
+
+        // Hex "#RRGGBB" / "RRGGBB" → [r, g, b] tuple that jsPDF /
+        // autoTable's colour-array convention accepts. Returns null when
+        // the input isn't a valid 6-char hex.
+        function _hexToRgbArray(hex) {
+            if (!hex) return null;
+            const s = String(hex).replace(/^#/, '');
+            if (!/^[0-9a-fA-F]{6}$/.test(s)) return null;
+            return [
+                parseInt(s.substr(0, 2), 16),
+                parseInt(s.substr(2, 2), 16),
+                parseInt(s.substr(4, 2), 16),
+            ];
+        }
+
+        // Paper sizes in mm — keyed by the same id jsPDF accepts in the
+        // `format` constructor option. Used to compute printable width
+        // for the column-chunk splitter below.
+        const PAPER_SIZES_MM = {
+            a3:     { w: 297, h: 420 },
+            a4:     { w: 210, h: 297 },
+            a5:     { w: 148, h: 210 },
+            letter: { w: 216, h: 279 },
+            legal:  { w: 216, h: 356 },
+        };
+
+        function _paperWidthMm(paperSize, orientation) {
+            const s = PAPER_SIZES_MM[paperSize] || PAPER_SIZES_MM.a4;
+            return orientation === 'landscape' ? s.h : s.w;
+        }
+
+        // Univer stores column widths in CSS pixels (96 dpi). Convert to
+        // mm using the same dpi assumption jsPDF uses internally — that
+        // way 1 mm in autoTable lines up with 1 mm of source column.
+        function _pxToMm(px) { return px * 25.4 / 96; }
+
+        function _getUniverColumnWidthsMm(sheet, maxC) {
+            const defaultPx = sheet.defaultColumnWidth || 88;
+            const columnData = sheet.columnData || {};
+            const out = [];
+            for (let c = 0; c <= maxC; c++) {
+                const px = (columnData[c] && columnData[c].w) || defaultPx;
+                out.push(_pxToMm(px));
+            }
+            return out;
+        }
+
+        // Chunk the column indices into groups that each fit within
+        // `printableWidthMm`. Walks left→right, accumulating widths, and
+        // cuts a new chunk every time the next column would overflow.
+        // Single overflow-wider-than-page columns get their own chunk
+        // (autoTable will then size them down to fit the page).
+        function _splitColumnsForPages(widthsMm, printableWidthMm) {
+            const chunks = [];
+            let current = [];
+            let currentW = 0;
+            for (let c = 0; c < widthsMm.length; c++) {
+                const w = widthsMm[c];
+                if (current.length > 0 && currentW + w > printableWidthMm) {
+                    chunks.push(current);
+                    current = [];
+                    currentW = 0;
+                }
+                current.push(c);
+                currentW += w;
+            }
+            if (current.length > 0) chunks.push(current);
+            return chunks;
+        }
+
+        // Render the current Univer snapshot as a PDF via jsPDF +
+        // autoTable and open it in a new tab so the user can review +
+        // print from the browser's built-in PDF viewer. The Univer
+        // canvas itself doesn't survive @media print (which is why
+        // window.print() was hidden behind an alert before), so we
+        // rebuild the workbook as a tabular PDF instead. Cell-level
+        // Univer styles (bg, text colour, bold, alignment, borders)
+        // are propagated to autoTable via didParseCell so the print
+        // looks like what the user would get opening the same file in
+        // Excel and pressing Print. Wide tables get split horizontally
+        // into multiple pages the same way Excel does by default — col
+        // groups go on separate pages instead of being scaled down to
+        // unreadable widths.
+        async function printSheetToPdf() {
+            const snapshot = getCurrentUniverSnapshot();
+            if (!snapshot || !snapshot.sheets) {
+                alert('ยังไม่มี workbook ให้พิมพ์');
+                return;
+            }
+            try {
+                setSheetOverlay(true, 'กำลังโหลด jsPDF + ฟอนต์ไทย (~370 KB)...');
+                await loadJsPdfAssets();
+                setSheetOverlay(true, 'กำลังสร้าง PDF...');
+
+                const sheetId = (snapshot.sheetOrder && snapshot.sheetOrder[0])
+                    || Object.keys(snapshot.sheets)[0];
+                const sheet = snapshot.sheets[sheetId];
+                const cellData = (sheet && sheet.cellData) || {};
+                const workbookStyles = snapshot.styles || {};
+
+                // Bounding range — only emit cells inside the populated
+                // region so we don't print 200 empty rows after the data.
+                let maxR = -1, maxC = -1;
+                for (const r in cellData) {
+                    if (!Object.prototype.hasOwnProperty.call(cellData, r)) continue;
+                    const ri = +r;
+                    for (const c in cellData[r]) {
+                        if (!Object.prototype.hasOwnProperty.call(cellData[r], c)) continue;
+                        const ci = +c;
+                        const cell = cellData[ri][ci];
+                        // Count a cell as "in range" if it has value OR style
+                        // (so style-only borders on empty cells still print).
+                        const hasV = cell && cell.v !== null && cell.v !== undefined && cell.v !== '';
+                        const hasS = cell && cell.s;
+                        if (!hasV && !hasS) continue;
+                        if (ri > maxR) maxR = ri;
+                        if (ci > maxC) maxC = ci;
+                    }
+                }
+                if (maxR < 0 || maxC < 0) {
+                    alert('Sheet ว่างเปล่า');
+                    return;
+                }
+
+                // Build a (row,col) → merge info map so the row builder
+                // below can drop covered cells and emit anchor cells with
+                // the right colSpan / rowSpan. Without this, merged title
+                // rows like "บริษัท …" collapse into the first cell and
+                // wrap inside one narrow column while the rest of the row
+                // stays empty.
+                const mergeMap = {};
+                for (const m of (sheet.mergeData || [])) {
+                    for (let r = m.startRow; r <= m.endRow; r++) {
+                        if (!mergeMap[r]) mergeMap[r] = {};
+                        for (let c = m.startColumn; c <= m.endColumn; c++) {
+                            mergeMap[r][c] = {
+                                isAnchor: r === m.startRow && c === m.startColumn,
+                                rowSpan: m.endRow - m.startRow + 1,
+                                colSpan: m.endColumn - m.startColumn + 1,
+                            };
+                        }
+                    }
+                }
+                // Per-chunk row builder: walks the columns in `chunkCols`
+                // (a subset of [0..maxC]), skips merge-covered cells, and
+                // emits anchor cells with adjusted colSpan that doesn't
+                // overshoot the chunk boundary. Excel behaves the same
+                // way: a merge that spans col A-N split across two pages
+                // shows A-G on page 1 with colSpan=7 and H-N on page 2
+                // with colSpan=7 (Excel actually drops the merge and just
+                // duplicates the value, we keep the visual merge inside
+                // each chunk for readability).
+                const buildRowForChunk = (r, chunkCols) => {
+                    const chunkSet = new Set(chunkCols);
+                    const out = [];
+                    for (let i = 0; i < chunkCols.length; i++) {
+                        const c = chunkCols[i];
+                        const merge = mergeMap[r] && mergeMap[r][c];
+                        if (merge && !merge.isAnchor) continue;
+                        const cell = (cellData[r] && cellData[r][c]) || null;
+                        const v = cell && cell.v;
+                        const text = (v === null || v === undefined) ? '' : String(v);
+                        if (merge && merge.isAnchor
+                            && (merge.colSpan > 1 || merge.rowSpan > 1)) {
+                            // Clip colSpan to the cells that still live
+                            // in this chunk so we don't claim columns
+                            // that ended up on the next page.
+                            let span = 0;
+                            for (let k = 0; k < merge.colSpan; k++) {
+                                if (chunkSet.has(c + k)) span++;
+                                else break;
+                            }
+                            const obj = { content: text };
+                            if (span > 1) obj.colSpan = span;
+                            if (merge.rowSpan > 1) obj.rowSpan = merge.rowSpan;
+                            out.push(obj);
+                        } else {
+                            out.push(text);
+                        }
+                    }
+                    return out;
+                };
+
+                const ps = loadPageSetup();
+                // Headers/footers steal vertical space — reserve them in
+                // the margin so autoTable doesn't draw rows under them.
+                const headerSpace = ps.header ? 12 : 0;
+                const footerSpace = ps.footer ? 6 : 0;
+
+                const { jsPDF } = window.jspdf;
+                const doc = new jsPDF({
+                    unit: 'mm',
+                    format: ps.paperSize,
+                    orientation: ps.orientation,
+                });
+                doc.setFont('THSarabun', 'normal');
+
+                // Resolve a Univer cell style (inline object OR registry
+                // string id) to its full inline form. autoTable receives
+                // sparse cells via section + indices — keep the lookup
+                // local so didParseCell stays cheap.
+                const resolveUniverStyle = (cell) => {
+                    if (!cell || !cell.s) return null;
+                    if (typeof cell.s === 'string') return workbookStyles[cell.s] || null;
+                    return cell.s;
+                };
+
+                // Header/footer text built once + drawn on every page in
+                // didDrawPage (autoTable re-fires it for each page break).
+                const dateRange = (function () {
+                    const df = document.getElementById('date_from')?.value;
+                    const dt = document.getElementById('date_to')?.value;
+                    return df && dt ? `${df} ถึง ${dt}` : '';
+                })();
+                const headerTitle = `SE Report — ${sheet.name || 'Sheet1'}`;
+                const headerSub = (dateRange ? `ช่วงวันที่ ${dateRange} · ` : '')
+                    + `พิมพ์เมื่อ ${new Date().toLocaleString('th-TH')}`;
+
+                // Excel-style horizontal page splitting: chunk the columns
+                // by the page's printable width and render one autoTable
+                // per chunk. Each chunk gets its own page break, so a 14-
+                // column report on A4 portrait prints as columns A-G on
+                // page 1 + columns H-N on page 2 (exactly what File →
+                // Print does in Excel without a "Fit to width" override).
+                const colWidthsMm = _getUniverColumnWidthsMm(sheet, maxC);
+                const paperW = _paperWidthMm(ps.paperSize, ps.orientation);
+                const printableW = Math.max(
+                    10, paperW - ps.marginLeft - ps.marginRight);
+                const colChunks = _splitColumnsForPages(colWidthsMm, printableW);
+
+                colChunks.forEach((chunkCols, chunkIdx) => {
+                    if (chunkIdx > 0) doc.addPage();
+                    const chunkHead = [buildRowForChunk(0, chunkCols)];
+                    const chunkBody = [];
+                    for (let r = 1; r <= maxR; r++) {
+                        chunkBody.push(buildRowForChunk(r, chunkCols));
+                    }
+                    // Pre-set columnStyles so each PDF column matches the
+                    // source column's exact width. Without this autoTable
+                    // would auto-fit each chunk independently and the
+                    // widths would drift between chunks.
+                    const columnStyles = {};
+                    chunkCols.forEach((srcCol, dstCol) => {
+                        columnStyles[dstCol] = { cellWidth: colWidthsMm[srcCol] };
+                    });
+                    doc.autoTable({
+                        head: chunkHead,
+                        body: chunkBody,
+                        // 'grid' = borders + no zebra striping. The default
+                        // 'striped' theme paints alternating row fills that
+                        // make every other row look like it has a real bg,
+                        // even when the source workbook is pure white — the
+                        // user-reported "พื้นหลังขึ้นเอง" symptom.
+                        theme: 'grid',
+                        startY: ps.marginTop + headerSpace,
+                        styles: {
+                            font: 'THSarabun', fontSize: 9, cellPadding: 1.6,
+                            overflow: 'linebreak', valign: 'top',
+                            lineColor: [180, 180, 180], lineWidth: 0.1,
+                            fillColor: false,
+                        },
+                        headStyles: {
+                            font: 'THSarabun',
+                            fillColor: [255, 255, 255], textColor: [0, 0, 0],
+                            fontStyle: 'normal',
+                        },
+                        alternateRowStyles: { fillColor: false },
+                        columnStyles,
+                        margin: {
+                            left: ps.marginLeft,
+                            right: ps.marginRight,
+                            top: ps.marginTop + headerSpace,
+                            bottom: ps.marginBottom + footerSpace,
+                        },
+                        didDrawPage: (data) => {
+                            if (ps.header) {
+                                doc.setFont('THSarabun', 'bold');
+                                doc.setFontSize(11);
+                                doc.setTextColor(30, 41, 59);
+                                doc.text(headerTitle, ps.marginLeft, ps.marginTop + 5);
+                                doc.setFont('THSarabun', 'normal');
+                                doc.setFontSize(8);
+                                doc.setTextColor(100, 116, 139);
+                                doc.text(headerSub, ps.marginLeft, ps.marginTop + 9);
+                            }
+                            if (ps.footer) {
+                                const total = doc.internal.getNumberOfPages();
+                                const pageW = doc.internal.pageSize.getWidth();
+                                const pageH = doc.internal.pageSize.getHeight();
+                                doc.setFont('THSarabun', 'normal');
+                                doc.setFontSize(8);
+                                doc.setTextColor(100, 116, 139);
+                                // When there are multiple column chunks, show
+                                // "หน้า 1 / N (กลุ่มคอลัมน์ 2/3)" so the user
+                                // can identify which horizontal slice is on
+                                // each page when reassembling the printout.
+                                const chunkLabel = colChunks.length > 1
+                                    ? ` (กลุ่มคอลัมน์ ${chunkIdx + 1}/${colChunks.length})`
+                                    : '';
+                                doc.text(
+                                    `หน้า ${data.pageNumber} / ${total}${chunkLabel}`,
+                                    pageW - ps.marginRight,
+                                    pageH - ps.marginBottom + 2,
+                                    { align: 'right' },
+                                );
+                            }
+                        },
+                        didParseCell: (data) => {
+                            // Map autoTable's local indices back to the
+                            // source workbook's (row, col) so the cell
+                            // style lookup hits the right cellData entry.
+                            // Without this, the second chunk would resolve
+                            // col 0 to Univer col 0 even though it should
+                            // be col 7 (start of the chunk).
+                            const r = data.section === 'head'
+                                ? 0
+                                : data.row.index + 1;
+                            const c = chunkCols[data.column.index];
+                            const cell = (cellData[r] && cellData[r][c]) || null;
+                            const us = resolveUniverStyle(cell);
+                            if (!us) return;
+                            const bg = _hexToRgbArray(us.bg && us.bg.rgb);
+                            if (bg) data.cell.styles.fillColor = bg;
+                            const cl = _hexToRgbArray(us.cl && us.cl.rgb);
+                            if (cl) data.cell.styles.textColor = cl;
+                            if (us.bl && us.it) data.cell.styles.fontStyle = 'bolditalic';
+                            else if (us.bl) data.cell.styles.fontStyle = 'bold';
+                            else if (us.it) data.cell.styles.fontStyle = 'italic';
+                            const H = { 1: 'left', 2: 'center', 3: 'right', 4: 'justify' };
+                            const V = { 1: 'top', 2: 'middle', 3: 'bottom', 4: 'middle' };
+                            if (us.ht && H[us.ht]) data.cell.styles.halign = H[us.ht];
+                            if (us.vt && V[us.vt]) data.cell.styles.valign = V[us.vt];
+                            if (us.bd) {
+                                const sides = ['t', 'b', 'l', 'r']
+                                    .map(k => us.bd[k]).filter(Boolean);
+                                if (sides.length) {
+                                    data.cell.styles.lineWidth = 0.15;
+                                    const c0 = _hexToRgbArray(sides[0].cl && sides[0].cl.rgb);
+                                    if (c0) data.cell.styles.lineColor = c0;
+                                }
+                            }
+                        },
+                    });
+                });
+
+                const blob = doc.output('blob');
+                const url = URL.createObjectURL(blob);
+                const baseName = (sheet.name || 'Sheet1')
+                    .replace(/[^\w฀-๿]+/g, '_') || 'Sheet';
+                const filename = `SE_Report_${baseName}_${tsForFilename()}.pdf`;
+                const win = window.open(url, '_blank');
+                if (win) {
+                    // Give the new tab a minute to load before revoking
+                    // the object URL — needed because Chrome streams the
+                    // PDF in.
+                    setTimeout(() => URL.revokeObjectURL(url), 60000);
+                    return;
+                }
+                // Popup was blocked — common when the user activation
+                // gesture expires during a cold loadJsPdfAssets() fetch.
+                // Fall back to a plain download so the user still gets
+                // the file without having to allow popups + retry. The
+                // <a download> trigger is bulletproof: popup-blockers
+                // don't intercept anchor-clicks that already exist in
+                // the document.
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                setSheetStatus(
+                    `บันทึก PDF ลง Downloads: ${filename} `
+                    + `(เปิดแท็บใหม่ไม่ได้ — Browser block popup)`
+                );
+                setTimeout(() => URL.revokeObjectURL(url), 10000);
+            } catch (e) {
+                console.error(e);
+                alert('สร้าง PDF ไม่สำเร็จ: ' + (e && e.message || e));
+            } finally {
+                setSheetOverlay(false);
+            }
+        }
+
+        // Route Print by active view:
+        //   Sheet → jsPDF + Sarabun (canvas can't survive @media print)
+        //   Table/Pivot → window.print() with the existing @media print CSS
         function printActiveView() {
             const active = document.querySelector('input[name=view]:checked')?.value;
             if (active === 'spreadsheet') {
-                alert(
-                    'มุมมอง Sheet ไม่รองรับการพิมพ์โดยตรง\n\n' +
-                    'กรุณาเปลี่ยนเป็นมุมมอง "ข้อมูล" หรือ "Pivot" ก่อนพิมพ์\n' +
-                    'หรือกดปุ่ม "บันทึก .xlsx" แล้วเปิดใน Excel เพื่อพิมพ์'
-                );
-                return;
+                return printSheetToPdf();
             }
             window.print();
         }
@@ -2692,8 +3394,10 @@
         // messages don't linger across mount attempts.
         const SHEET_EMPTY_DEFAULT_HTML =
             'ยังไม่มีข้อมูล — กรุณา Fetch ก่อน แล้วกลับมาที่นี่<br>' +
-            'หรือโหลด workbook ที่บันทึกไว้:' +
-            '<br><button type="button" class="sheet-empty-open-btn" ' +
+            'หรือเริ่มต้นจาก:' +
+            '<br><button type="button" class="sheet-empty-open-btn secondary" ' +
+            'onclick="newBlankWorkbook()">📄 ไฟล์ใหม่</button>' +
+            '<button type="button" class="sheet-empty-open-btn" ' +
             'onclick="openSheetFile()">📂 Open ไฟล์</button>';
 
         function setSheetEmptyText(html) {
@@ -2725,11 +3429,17 @@
             document.head.appendChild(link);
         }
 
-        // ===== SheetJS lazy-loader =====
-        // Used by Export Excel (table view), Save as XLSX (sheet view),
-        // and Open .xlsx in the sheet view. ~1.4 MB minified — too big
-        // to ship on every page load when most users never export.
-        const SHEETJS_URL = 'https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js';
+        // ===== XLSX lazy-loader =====
+        // xlsx-js-style is a drop-in fork of SheetJS (same XLSX global,
+        // same API surface) that ALSO writes cell-level styles — borders,
+        // fills, fonts, alignment. We need this for "Save XLSX overwrites
+        // the source file" to preserve the styling the user originally
+        // imported from. The vanilla SheetJS Community Edition silently
+        // drops styles on write, which is why round-tripping an .xlsx
+        // (open → edit → save → reopen) used to come back style-less.
+        // Used by Export Excel (table view), Save (.xlsx sheet view),
+        // and Open .xlsx in the sheet view. ~1 MB minified.
+        const SHEETJS_URL = 'https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js';
         const sheetJsState = { loaded: false, loadingPromise: null };
 
         function loadSheetJsAssets() {
@@ -2737,12 +3447,84 @@
             if (sheetJsState.loadingPromise) return sheetJsState.loadingPromise;
             sheetJsState.loadingPromise = _loadUniverScript(SHEETJS_URL).then(() => {
                 if (typeof XLSX === 'undefined') {
-                    throw new Error('SheetJS global (XLSX) missing after script load');
+                    throw new Error('xlsx-js-style global (XLSX) missing after script load');
                 }
                 sheetJsState.loaded = true;
             });
             return sheetJsState.loadingPromise.catch(err => {
                 sheetJsState.loadingPromise = null;
+                throw err;
+            });
+        }
+
+        // ===== jsPDF + autoTable + Sarabun Thai font lazy-loader =====
+        // Only loaded when the user clicks Print in Sheet view (Univer's
+        // canvas-based render doesn't survive @media print). jsPDF + the
+        // autoTable plugin handle layout; the Sarabun TTFs are needed
+        // because jsPDF's built-in fonts (Helvetica/Times) can't render
+        // Thai glyphs — without them, Thai text comes out as tofu (▢▢▢).
+        // Total cold-start cost ~370 KB, all from jsdelivr.
+        const JSPDF_URL = 'https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js';
+        const JSPDF_AUTOTABLE_URL = 'https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js';
+        const SARABUN_REG_URL = 'https://cdn.jsdelivr.net/npm/font-th-sarabun-new@1.0.0/fonts/THSarabunNew-webfont.ttf';
+        const SARABUN_BOLD_URL = 'https://cdn.jsdelivr.net/npm/font-th-sarabun-new@1.0.0/fonts/THSarabunNew_bold-webfont.ttf';
+        const jsPdfState = { loaded: false, loadingPromise: null };
+
+        // ArrayBuffer → base64 in chunks so we don't blow the call stack
+        // on 96 KB TTFs (String.fromCharCode.apply collapses past ~125k
+        // args in Chrome).
+        function _arrayBufferToBase64(buffer) {
+            let binary = '';
+            const bytes = new Uint8Array(buffer);
+            const chunkSize = 0x8000;
+            for (let i = 0; i < bytes.length; i += chunkSize) {
+                binary += String.fromCharCode.apply(
+                    null, bytes.subarray(i, i + chunkSize)
+                );
+            }
+            return btoa(binary);
+        }
+
+        // Fire-and-forget preload, called when the user enters Sheet
+        // view so the print-asset fetch finishes before they click Print.
+        // Without this, the ~370 KB CDN fetch happens inside the click
+        // handler — by the time it resolves, Chrome has revoked the
+        // user-activation gesture and window.open() gets popup-blocked.
+        function preloadPrintAssets() {
+            if (jsPdfState.loaded || jsPdfState.loadingPromise) return;
+            loadJsPdfAssets().catch(e =>
+                console.warn('print assets preload failed (will retry on click):', e));
+        }
+
+        function loadJsPdfAssets() {
+            if (jsPdfState.loaded) return Promise.resolve();
+            if (jsPdfState.loadingPromise) return jsPdfState.loadingPromise;
+            jsPdfState.loadingPromise = (async () => {
+                await _loadUniverScript(JSPDF_URL);
+                await _loadUniverScript(JSPDF_AUTOTABLE_URL);
+                if (!window.jspdf || !window.jspdf.jsPDF) {
+                    throw new Error('jsPDF global missing after script load');
+                }
+                const [regBuf, boldBuf] = await Promise.all([
+                    fetch(SARABUN_REG_URL).then(r => r.arrayBuffer()),
+                    fetch(SARABUN_BOLD_URL).then(r => r.arrayBuffer()),
+                ]);
+                const regB64 = _arrayBufferToBase64(regBuf);
+                const boldB64 = _arrayBufferToBase64(boldBuf);
+                // jsPDF.API.events lets us run a callback on every new
+                // jsPDF instance — install the fonts into each doc's
+                // VFS so we don't pay the addFileToVFS cost twice.
+                const { jsPDF } = window.jspdf;
+                jsPDF.API.events.push(['addFonts', function () {
+                    this.addFileToVFS('THSarabun.ttf', regB64);
+                    this.addFileToVFS('THSarabun-Bold.ttf', boldB64);
+                    this.addFont('THSarabun.ttf', 'THSarabun', 'normal');
+                    this.addFont('THSarabun-Bold.ttf', 'THSarabun', 'bold');
+                }]);
+                jsPdfState.loaded = true;
+            })();
+            return jsPdfState.loadingPromise.catch(err => {
+                jsPdfState.loadingPromise = null;
                 throw err;
             });
         }
@@ -3228,6 +4010,58 @@
             }
         }
 
+        // Minimum-viable IWorkbookData for a blank Sheet1. Mirrors the
+        // shape recordsToUniverWorkbook returns (so mountUniver doesn't
+        // see a different schema) but with an empty cellData and no
+        // freeze pane — there's no header row to pin.
+        function blankWorkbookSnapshot() {
+            const sheetId = 'sheet-' + Date.now();
+            return {
+                id: 'wb-' + Date.now(),
+                name: 'Untitled',
+                appVersion: '0.10.0',
+                locale: 'enUS',
+                sheetOrder: [sheetId],
+                sheets: {
+                    [sheetId]: {
+                        id: sheetId,
+                        name: 'Sheet1',
+                        rowCount: 200,
+                        columnCount: 26,
+                        cellData: {},
+                        mergeData: [],
+                        defaultColumnWidth: 110,
+                        defaultRowHeight: 24,
+                    },
+                },
+                styles: {},
+                resources: [],
+            };
+        }
+
+        async function newBlankWorkbook() {
+            if (sheetState.dirty && !confirm(
+                'มีการแก้ไขที่ยังไม่ได้บันทึก — สร้าง workbook ใหม่จะทับของเดิม\n\nต้องการต่อ?'
+            )) return;
+            try {
+                setSheetOverlay(true, 'กำลังสร้าง workbook ว่าง...');
+                await loadUniverAssets();
+                sheetState.mounted = false;
+                mountUniver(blankWorkbookSnapshot(), 'ไฟล์ใหม่');
+                // Blank workbook isn't bound to any disk file — clear the
+                // handle so Save prompts for a destination.
+                setSheetFile(null, null, null);
+                setSheetDirty(false);
+                sheetState.recordCount = 0;
+                sheetState.colCount = 0;
+            } catch (e) {
+                console.error(e);
+                alert('สร้าง workbook ใหม่ไม่สำเร็จ: ' + (e && e.message || e));
+            } finally {
+                setSheetOverlay(false);
+            }
+        }
+
         async function newFromData() {
             if (sheetState.dirty && !confirm('มีการแก้ไขที่ยังไม่ได้บันทึก — สร้าง workbook ใหม่จะทับของเดิม\n\nต้องการต่อ?')) return;
             if (!lastRecords || lastRecords.length === 0) {
@@ -3261,6 +4095,11 @@
                     wb,
                     `จากข้อมูล: ${filtered.length.toLocaleString()} rows × ${selected.length} cols`
                 );
+                // A fresh fetch-derived workbook is not associated with any
+                // disk file — drop the previous handle so Save prompts for
+                // a destination rather than silently overwriting whatever
+                // the user last opened.
+                setSheetFile(null, null, null);
             } catch (e) {
                 console.error(e);
                 alert('สร้าง workbook ไม่สำเร็จ: ' + (e && e.message || e));
@@ -3292,35 +4131,229 @@
             return sheetState.currentData;
         }
 
-        function saveSheetJson() {
+        // Build a JSON blob from the current Univer snapshot. Cheap — just
+        // a snapshot + stringify. Returns null if there's nothing to save.
+        function buildSheetJsonBlob() {
             const snapshot = getCurrentUniverSnapshot();
-            if (!snapshot || !snapshot.sheets) {
+            if (!snapshot || !snapshot.sheets) return null;
+            sheetState.currentData = snapshot;
+            const json = JSON.stringify(snapshot);
+            return new Blob([json], { type: 'application/json' });
+        }
+
+        // Build an XLSX blob via xlsx-js-style. Loads the CDN bundle on
+        // first call. Preserves cell-level styles (borders / fills /
+        // fonts / alignment) so an open-edit-save round-trip on an .xlsx
+        // doesn't strip the formatting the user imported. Returns null
+        // if the workbook has no cells worth writing.
+        async function buildSheetXlsxBlob() {
+            const snapshot = getCurrentUniverSnapshot();
+            if (!snapshot || !snapshot.sheets) return null;
+            await loadSheetJsAssets();
+            const sheetId = (snapshot.sheetOrder && snapshot.sheetOrder[0]) ||
+                            Object.keys(snapshot.sheets)[0];
+            const sheet = snapshot.sheets[sheetId];
+            const cellData = (sheet && sheet.cellData) || {};
+            const workbookStyles = snapshot.styles || {};
+            // Sparse walk — avoids the ~2.5M-string dense pre-fill that a
+            // 50k×49 workbook would otherwise need; iterate only the cells
+            // that actually exist. Cells with style-only content (empty
+            // value but a border / fill / etc) are emitted too so the
+            // formatting survives — without that, a fully-bordered empty
+            // template row would lose its outline on save.
+            const ws = {};
+            let maxR = -1, maxC = -1;
+            for (const rkey in cellData) {
+                if (!Object.prototype.hasOwnProperty.call(cellData, rkey)) continue;
+                const ri = +rkey;
+                const rowCells = cellData[rkey];
+                for (const ckey in rowCells) {
+                    if (!Object.prototype.hasOwnProperty.call(rowCells, ckey)) continue;
+                    const ci = +ckey;
+                    const cell = rowCells[ckey];
+                    const v = cell && cell.v;
+                    const hasValue = !(v === null || v === undefined || v === '');
+                    const xs = cell && cell.s
+                        ? _univerStyleToXlsx(cell.s, workbookStyles)
+                        : null;
+                    if (!hasValue && !xs) continue;
+                    if (ri > maxR) maxR = ri;
+                    if (ci > maxC) maxC = ci;
+                    const addr = XLSX.utils.encode_cell({ r: ri, c: ci });
+                    const xCell = {};
+                    if (hasValue) {
+                        xCell.v = v;
+                        xCell.t = (typeof v === 'number' && Number.isFinite(v)) ? 'n' : 's';
+                    } else {
+                        // Style-only cell — emit an empty string so the
+                        // writer keeps the cell node + applies the style.
+                        xCell.v = '';
+                        xCell.t = 's';
+                    }
+                    if (xs) xCell.s = xs;
+                    ws[addr] = xCell;
+                }
+            }
+            if (maxR < 0 || maxC < 0) return null;
+            ws['!ref'] = XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: maxR, c: maxC } });
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, sheet.name || 'Sheet1');
+            const arrBuf = XLSX.write(wb, { type: 'array', bookType: 'xlsx' });
+            return new Blob([arrBuf], {
+                type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            });
+        }
+
+        // Save = overwrite the currently-open file in its original format.
+        // No handle yet (fresh fetch, or browser without FS Access API and
+        // never-saved) → fall through to Save As so the user can pick a
+        // destination. This matches Office's "Save on a never-saved doc
+        // opens Save As" flow.
+        async function saveCurrent() {
+            if (!sheetState.mounted) {
+                alert('ยังไม่มี workbook ให้บันทึก');
+                return;
+            }
+            if (!sheetState.fileHandle || !sheetState.fileKind) {
+                return saveAs();
+            }
+            try {
+                const kind = sheetState.fileKind;
+                setSheetOverlay(true, kind === 'xlsx'
+                    ? 'กำลังเขียน .xlsx...'
+                    : 'กำลังเขียน .se.json...');
+                const blob = kind === 'xlsx'
+                    ? await buildSheetXlsxBlob()
+                    : buildSheetJsonBlob();
+                if (!blob) {
+                    alert('Sheet ว่างเปล่า');
+                    return;
+                }
+                await writeBlobToHandle(sheetState.fileHandle, blob);
+                setSheetDirty(false);
+                setSheetStatus(
+                    `บันทึก: ${sheetState.fileName} `
+                    + `(${(blob.size / 1024 / 1024).toFixed(2)} MB)`
+                );
+            } catch (e) {
+                // Stale-handle recovery: drop the dead handle and
+                // re-route to Save As so the user can pick the file
+                // again (Chrome can't always recover an old handle once
+                // its cached state is out of sync with disk).
+                if (isStaleHandleError(e)) {
+                    console.warn('handle stale, falling back to Save As:', e);
+                    const stalefileName = sheetState.fileName;
+                    setSheetOverlay(false);
+                    setSheetFile(null, null, null);
+                    alert(
+                        `ไฟล์ "${stalefileName}" ถูกแตะจากภายนอกหรือเชื่อมต่อหาย — `
+                        + 'กรุณาเลือกที่บันทึกอีกครั้ง'
+                    );
+                    return saveAs();
+                }
+                console.error(e);
+                alert('บันทึกไม่สำเร็จ: ' + (e && e.message || e));
+            } finally {
+                setSheetOverlay(false);
+            }
+        }
+
+        // Save As = pick a new location + format and (re)bind the handle
+        // for future 1-click Saves. Bundles both formats in the picker so
+        // the user switches via the type dropdown; the resulting filename
+        // extension is what tells us which blob to build. Falls back to a
+        // confirm-based prompt + download on browsers without FS Access.
+        async function saveAs() {
+            if (!sheetState.mounted) {
                 alert('ยังไม่มี workbook ให้บันทึก');
                 return;
             }
             try {
-                sheetState.currentData = snapshot;
-                const json = JSON.stringify(snapshot);
-                const blob = new Blob([json], { type: 'application/json' });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                // Double extension on purpose. Windows hides the trailing
-                // ".json" (default "hide known extensions" setting) so users
-                // see "SE_Report_workbook_…se" with file type "JSON Source
-                // File"; on macOS/Linux they see the full ".se.json". Either
-                // way, editors/parsers treat it as JSON because of the .json
-                // suffix — branded name + zero loss in tooling support.
-                a.download = `SE_Report_workbook_${tsForFilename()}.se.json`;
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                setTimeout(() => URL.revokeObjectURL(url), 1000);
-                setSheetDirty(false);
-                setSheetStatus(`บันทึกแล้ว (${(blob.size / 1024 / 1024).toFixed(2)} MB)`);
+                if (window.showSaveFilePicker) {
+                    // Suggest the current basename so re-Save-As to a new
+                    // path / format starts with something recognizable.
+                    const baseName = sheetState.fileName
+                        ? sheetState.fileName.replace(
+                            /\.(se\.json|se|univer\.json|json|xlsx|xls)$/i, '')
+                        : `SE_Report_workbook_${tsForFilename()}`;
+                    const isXlsxSource = sheetState.fileKind === 'xlsx';
+                    const suggested = isXlsxSource
+                        ? baseName + '.xlsx'
+                        : baseName + '.se.json';
+                    // Order matters: the first type sits at the top of the
+                    // dropdown and is pre-selected. Match the source kind
+                    // so users opening an .xlsx see .xlsx selected first.
+                    const types = isXlsxSource
+                        ? [FS_TYPES_SAVE_XLSX[0], FS_TYPES_SAVE_JSON[0]]
+                        : [FS_TYPES_SAVE_JSON[0], FS_TYPES_SAVE_XLSX[0]];
+                    let handle;
+                    try {
+                        handle = await window.showSaveFilePicker({
+                            suggestedName: suggested,
+                            types,
+                        });
+                    } catch (e) {
+                        if (e && e.name === 'AbortError') return;
+                        throw e;
+                    }
+                    const f = await handle.getFile();
+                    const isXlsx = /\.xlsx$/i.test(f.name);
+                    const kind = isXlsx ? 'xlsx' : 'json';
+                    setSheetOverlay(true, `กำลังเขียน ${f.name}...`);
+                    const blob = isXlsx
+                        ? await buildSheetXlsxBlob()
+                        : buildSheetJsonBlob();
+                    if (!blob) {
+                        alert('Sheet ว่างเปล่า');
+                        return;
+                    }
+                    await writeBlobToHandle(handle, blob);
+                    setSheetFile(handle, f.name, kind);
+                    setSheetDirty(false);
+                    setSheetStatus(
+                        `บันทึก: ${f.name} `
+                        + `(${(blob.size / 1024 / 1024).toFixed(2)} MB)`
+                    );
+                } else {
+                    // Firefox / Safari path — no native picker, fall back to
+                    // a confirm + classic download.
+                    const choice = confirm(
+                        'เลือกรูปแบบไฟล์:\n\n' +
+                        'ตกลง = .se.json (เก็บสูตรครบ — แนะนำ)\n' +
+                        'ยกเลิก = .xlsx (สูตรกลายเป็นค่า)'
+                    );
+                    const kind = choice ? 'json' : 'xlsx';
+                    setSheetOverlay(true, 'กำลังเขียนไฟล์...');
+                    const blob = kind === 'xlsx'
+                        ? await buildSheetXlsxBlob()
+                        : buildSheetJsonBlob();
+                    if (!blob) {
+                        alert('Sheet ว่างเปล่า');
+                        return;
+                    }
+                    const ts = tsForFilename();
+                    const fallbackName = kind === 'xlsx'
+                        ? `SE_Report_workbook_${ts}.xlsx`
+                        : `SE_Report_workbook_${ts}.se.json`;
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = fallbackName;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    setTimeout(() => URL.revokeObjectURL(url), 1000);
+                    setSheetDirty(false);
+                    setSheetStatus(
+                        `บันทึก (download): ${fallbackName} `
+                        + `(${(blob.size / 1024 / 1024).toFixed(2)} MB)`
+                    );
+                }
             } catch (e) {
                 console.error(e);
                 alert('บันทึกไม่สำเร็จ: ' + (e && e.message || e));
+            } finally {
+                setSheetOverlay(false);
             }
         }
 
@@ -3403,6 +4436,87 @@
             mediumDashDot: 10, mediumDashDotDot: 11,
             slantDashDot: 12, thick: 13,
         };
+
+        // Inverse of the above — used when writing .xlsx back out so the
+        // borders we imported survive the round-trip. Mirrors the same
+        // index ↔ name pairs.
+        const _UNIVER_BORDER_STYLE_TO_XLSX = {
+            1: 'thin', 2: 'hair', 3: 'dotted', 4: 'dashed',
+            5: 'dashDot', 6: 'dashDotDot', 7: 'double',
+            8: 'medium', 9: 'mediumDashed',
+            10: 'mediumDashDot', 11: 'mediumDashDotDot',
+            12: 'slantDashDot', 13: 'thick',
+        };
+
+        // Strip the optional leading "#" from a Univer hex colour and
+        // upper-case it so xlsx-js-style accepts it (it wants bare 6-char
+        // hex with no prefix). Returns null when the input isn't usable.
+        function _univerColorToXlsxRgb(c) {
+            if (!c || !c.rgb) return null;
+            const s = String(c.rgb).replace(/^#/, '').toUpperCase();
+            return /^[0-9A-F]{6}$/.test(s) ? s : null;
+        }
+
+        // Translate a Univer cell-level style (inline object OR a string
+        // id pointing into workbook.styles) into a xlsx-js-style cell
+        // style. Maps:
+        //   - bd.{t,b,l,r}  → border.{top,bottom,left,right}
+        //   - bg            → fill (solid)
+        //   - ff/fs/cl/bl/it/ul/st → font.{name,sz,color,bold,italic,
+        //                                  underline,strike}
+        //   - ht/vt/tb      → alignment.{horizontal,vertical,wrapText}
+        // Returns null when nothing maps (caller can skip).
+        function _univerStyleToXlsx(cellS, workbookStyles) {
+            if (!cellS) return null;
+            const us = (typeof cellS === 'string')
+                ? (workbookStyles && workbookStyles[cellS])
+                : cellS;
+            if (!us || typeof us !== 'object') return null;
+            const out = {};
+            if (us.bd) {
+                const border = {};
+                const edge = (e) => {
+                    if (!e) return null;
+                    return {
+                        style: _UNIVER_BORDER_STYLE_TO_XLSX[e.s] || 'thin',
+                        color: { rgb: _univerColorToXlsxRgb(e.cl) || '000000' },
+                    };
+                };
+                const t = edge(us.bd.t); if (t) border.top = t;
+                const b = edge(us.bd.b); if (b) border.bottom = b;
+                const l = edge(us.bd.l); if (l) border.left = l;
+                const r = edge(us.bd.r); if (r) border.right = r;
+                if (Object.keys(border).length) out.border = border;
+            }
+            const bgRgb = _univerColorToXlsxRgb(us.bg);
+            if (bgRgb) {
+                out.fill = {
+                    patternType: 'solid',
+                    fgColor: { rgb: bgRgb },
+                    bgColor: { rgb: bgRgb },
+                };
+            }
+            const font = {};
+            if (us.ff) font.name = us.ff;
+            if (us.fs) font.sz = us.fs;
+            const fontRgb = _univerColorToXlsxRgb(us.cl);
+            if (fontRgb) font.color = { rgb: fontRgb };
+            if (us.bl) font.bold = true;
+            if (us.it) font.italic = true;
+            if (us.ul) font.underline = true;
+            if (us.st) font.strike = true;
+            if (Object.keys(font).length) out.font = font;
+            if (us.ht || us.vt || us.tb === 3) {
+                const alignment = {};
+                const H = { 1: 'left', 2: 'center', 3: 'right', 4: 'justify' };
+                const V = { 1: 'top', 2: 'center', 3: 'bottom', 4: 'justify' };
+                if (us.ht && H[us.ht]) alignment.horizontal = H[us.ht];
+                if (us.vt && V[us.vt]) alignment.vertical = V[us.vt];
+                if (us.tb === 3) alignment.wrapText = true;
+                if (Object.keys(alignment).length) out.alignment = alignment;
+            }
+            return Object.keys(out).length ? out : null;
+        }
 
         // Excel uses 8-char ARGB ("FF000000") — Univer wants 6-char hex
         // ("#000000"). Drops the alpha channel.
@@ -3779,122 +4893,195 @@
             };
         }
 
-        function openSheetFile() {
-            if (sheetState.dirty && !confirm('มีการแก้ไขที่ยังไม่ได้บันทึก — เปิดไฟล์ใหม่จะทับของเดิม\n\nต้องการต่อ?')) return;
-            const input = document.createElement('input');
-            input.type = 'file';
-            // Accept both Univer's native format and Excel files. The
-            // long MIME types are needed because Chrome on some setups
-            // hides files when the extension list alone doesn't match the
-            // OS-reported MIME (the symptom that prompted this change).
-            // New brand: .se / .se.json. Keep .univer.json so files saved
-            // before the rename still open. Plain .json stays too — useful
-            // for ad-hoc edits in an editor and for the few users who type
-            // their own filename.
-            input.accept = [
-                '.se', '.se.json',
-                '.univer.json', '.json',
-                '.xlsx', '.xls',
-                'application/json',
-                'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-                'application/vnd.ms-excel',
-            ].join(',');
-            input.style.display = 'none';
-            input.addEventListener('change', async () => {
-                const file = input.files && input.files[0];
-                document.body.removeChild(input);
-                if (!file) return;
-                try {
-                    setSheetOverlay(true, `กำลังอ่านไฟล์ ${file.name}...`);
-                    await loadUniverAssets();
+        // Long MIME types are needed because Chrome on some setups hides
+        // files when the extension list alone doesn't match the OS-reported
+        // MIME (the symptom that prompted this list).
+        // New brand: .se / .se.json. Keep .univer.json so files saved
+        // before the rename still open. Plain .json stays too — useful
+        // for ad-hoc edits in an editor and for the few users who type
+        // their own filename.
+        const FILE_ACCEPT_LIST = [
+            '.se', '.se.json',
+            '.univer.json', '.json',
+            '.xlsx', '.xls',
+            'application/json',
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'application/vnd.ms-excel',
+        ];
 
-                    const isExcel = /\.(xlsx|xls)$/i.test(file.name);
-                    let data;
-                    if (isExcel) {
-                        setSheetOverlay(true, `กำลังโหลด SheetJS...`);
-                        await loadSheetJsAssets();
-                        setSheetOverlay(true, `กำลังอ่าน ${file.name}...`);
-                        const buf = await file.arrayBuffer();
-                        const wb = XLSX.read(buf, { type: 'array' });
-                        data = await xlsxWorkbookToUniver(wb, file.name, buf);
-                    } else {
-                        const text = await file.text();
-                        data = JSON.parse(text);
-                        if (!data || typeof data !== 'object' || !data.sheets) {
-                            throw new Error('รูปแบบไฟล์ไม่ถูกต้อง — คาดว่าเป็น SE workbook (.se / .se.json / .univer.json) หรือ Excel (.xlsx / .xls)');
-                        }
-                    }
-                    sheetState.mounted = false;
-                    mountUniver(data, `เปิดจากไฟล์: ${file.name}`);
-                } catch (e) {
-                    console.error(e);
-                    alert('เปิดไฟล์ไม่สำเร็จ: ' + (e && e.message || e));
-                } finally {
-                    setSheetOverlay(false);
+        // FS Access API type filters for showOpenFilePicker / showSave-
+        // FilePicker. The XLSX one uses the long MIME the standard expects.
+        // Open picker bundles SE + Excel extensions into a single entry so
+        // the user sees every supported workbook at once without having to
+        // switch the type dropdown.
+        const FS_TYPES_OPEN = [
+            {
+                description: 'SE / Excel workbook',
+                accept: {
+                    'application/json': ['.se', '.se.json', '.univer.json', '.json'],
+                    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx', '.xls'],
+                },
+            },
+        ];
+        const FS_TYPES_SAVE_JSON = [
+            { description: 'SE workbook',
+              accept: { 'application/json': ['.se.json'] } },
+        ];
+        const FS_TYPES_SAVE_XLSX = [
+            { description: 'Excel workbook',
+              accept: { 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'] } },
+        ];
+
+        // Centralize file-handle bookkeeping: keep sheetState.fileHandle /
+        // fileName / fileKind in sync and surface the active filename via
+        // Open/Save tooltips + the small label after the Print button so
+        // the user knows what gets overwritten on the next Save.
+        function setSheetFile(handle, name, kind) {
+            sheetState.fileHandle = handle || null;
+            sheetState.fileName = name || null;
+            sheetState.fileKind = kind || null;
+            const openBtn = document.querySelector('.se-file-ops [data-op="open"]');
+            if (openBtn) {
+                openBtn.title = name
+                    ? `เปิดไฟล์อื่น (ปัจจุบัน: ${name})`
+                    : 'เปิดไฟล์ .se / .se.json หรือ Excel';
+            }
+            const saveBtn = document.querySelector('.se-file-ops [data-op="save"]');
+            if (saveBtn) {
+                saveBtn.title = name
+                    ? `บันทึกทับ ${name}`
+                    : 'บันทึก (ครั้งแรกจะถามที่บันทึก)';
+            }
+            const saveAsBtn = document.querySelector('.se-file-ops [data-op="saveas"]');
+            if (saveAsBtn) {
+                saveAsBtn.title = 'บันทึกเป็น... (เลือก path / format)';
+            }
+            const fnLabel = document.getElementById('sheetFileName');
+            if (fnLabel) {
+                if (name) {
+                    fnLabel.textContent = name;
+                    fnLabel.title = `ไฟล์ปัจจุบัน: ${name}`;
+                    fnLabel.style.display = '';
+                } else {
+                    fnLabel.textContent = '';
+                    fnLabel.removeAttribute('title');
+                    fnLabel.style.display = 'none';
                 }
-            });
-            document.body.appendChild(input);
-            input.click();
+            }
         }
 
-        async function saveSheetXlsx() {
-            const snapshot = getCurrentUniverSnapshot();
-            if (!snapshot || !snapshot.sheets) {
-                alert('ยังไม่มี workbook ให้บันทึก');
-                return;
-            }
-            try {
-                // First Save-XLSX click triggers the SheetJS CDN fetch.
-                // Show the overlay so the user knows we're not frozen.
-                setSheetOverlay(true, 'กำลังโหลด SheetJS...');
-                await loadSheetJsAssets();
-                setSheetOverlay(true, 'กำลังเขียนไฟล์ .xlsx...');
-                const sheetId = (snapshot.sheetOrder && snapshot.sheetOrder[0]) ||
-                                Object.keys(snapshot.sheets)[0];
-                const sheet = snapshot.sheets[sheetId];
-                const cellData = (sheet && sheet.cellData) || {};
-                // Build the SheetJS worksheet directly from the sparse
-                // cellData instead of materializing a dense (maxR+1)×(maxC+1)
-                // array of '' first. At 50k×49 the dense pre-fill alone
-                // allocates ~2.5M strings; the sparse write iterates only
-                // the cells that actually exist (usually <1M).
-                const ws = {};
-                let maxR = -1, maxC = -1;
-                for (const rkey in cellData) {
-                    if (!Object.prototype.hasOwnProperty.call(cellData, rkey)) continue;
-                    const ri = +rkey;
-                    if (ri > maxR) maxR = ri;
-                    const rowCells = cellData[rkey];
-                    for (const ckey in rowCells) {
-                        if (!Object.prototype.hasOwnProperty.call(rowCells, ckey)) continue;
-                        const ci = +ckey;
-                        if (ci > maxC) maxC = ci;
-                        const cell = rowCells[ckey];
-                        const v = cell && cell.v;
-                        if (v === null || v === undefined || v === '') continue;
-                        const addr = XLSX.utils.encode_cell({ r: ri, c: ci });
-                        const t = (typeof v === 'number' && Number.isFinite(v)) ? 'n' : 's';
-                        ws[addr] = { v, t };
+        // Write a blob to a FileSystemFileHandle, requesting readwrite
+        // permission if needed. Browsers prompt the user on first use —
+        // subsequent saves in the same tab go through silently.
+        async function writeBlobToHandle(handle, blob) {
+            if (handle.queryPermission) {
+                let perm = await handle.queryPermission({ mode: 'readwrite' });
+                if (perm !== 'granted') {
+                    perm = await handle.requestPermission({ mode: 'readwrite' });
+                    if (perm !== 'granted') {
+                        throw new Error('ไม่ได้รับสิทธิ์เขียนไฟล์');
                     }
                 }
-                if (maxR < 0 || maxC < 0) {
-                    alert('Sheet ว่างเปล่า');
-                    return;
-                }
-                // SheetJS requires '!ref' to define the worksheet's
-                // bounding range; without it the file opens but Excel
-                // sees an empty sheet.
-                ws['!ref'] = XLSX.utils.encode_range({
-                    s: { r: 0, c: 0 },
-                    e: { r: maxR, c: maxC },
+            }
+            // Refresh the handle's cached metadata before opening the
+            // writable. Without this, a stale mtime/size from a previous
+            // read can trigger:
+            //   "InvalidStateError: An operation that depends on state
+            //    cached in an interface object was made but the state had
+            //    changed since it was read from disk."
+            // A no-op getFile() round-trip is enough to re-sync.
+            try {
+                if (handle.getFile) await handle.getFile();
+            } catch {}
+            const writable = await handle.createWritable();
+            try {
+                await writable.write(blob);
+            } finally {
+                await writable.close();
+            }
+        }
+
+        // Recognises the "stale handle" InvalidStateError so callers can
+        // gracefully fall back to a Save As re-prompt instead of just
+        // surfacing the cryptic browser message to the user.
+        function isStaleHandleError(e) {
+            if (!e) return false;
+            if (e.name === 'InvalidStateError') return true;
+            return /state cached/i.test(e.message || '');
+        }
+
+        // Legacy fallback file picker for browsers without FS Access API
+        // (Firefox, Safari). Returns a File with no handle attached.
+        function pickFileViaInput() {
+            return new Promise((resolve) => {
+                const input = document.createElement('input');
+                input.type = 'file';
+                input.accept = FILE_ACCEPT_LIST.join(',');
+                input.style.display = 'none';
+                input.addEventListener('change', () => {
+                    const f = input.files && input.files[0];
+                    document.body.removeChild(input);
+                    resolve(f || null);
                 });
-                const wb = XLSX.utils.book_new();
-                XLSX.utils.book_append_sheet(wb, ws, sheet.name || 'Sheet1');
-                XLSX.writeFile(wb, `SE_Report_workbook_${tsForFilename()}.xlsx`);
-                setSheetStatus('บันทึก .xlsx แล้ว (สูตรเป็นค่า — lossy)');
+                document.body.appendChild(input);
+                input.click();
+            });
+        }
+
+        async function openSheetFile() {
+            if (sheetState.dirty && !confirm('มีการแก้ไขที่ยังไม่ได้บันทึก — เปิดไฟล์ใหม่จะทับของเดิม\n\nต้องการต่อ?')) return;
+
+            // Prefer File System Access API — gives us a FileSystemFileHandle
+            // we can later use for in-place Save. Falls back to <input> on
+            // Firefox/Safari which don't expose showOpenFilePicker (those
+            // browsers still get the legacy download-on-save path).
+            let file = null;
+            let handle = null;
+            if (window.showOpenFilePicker) {
+                try {
+                    const [h] = await window.showOpenFilePicker({
+                        types: FS_TYPES_OPEN,
+                        multiple: false,
+                        excludeAcceptAllOption: false,
+                    });
+                    handle = h;
+                    file = await h.getFile();
+                } catch (e) {
+                    if (e && e.name === 'AbortError') return;
+                    console.warn('showOpenFilePicker failed, falling back to <input>:', e);
+                }
+            }
+            if (!file) {
+                file = await pickFileViaInput();
+                if (!file) return;
+            }
+
+            try {
+                setSheetOverlay(true, `กำลังอ่านไฟล์ ${file.name}...`);
+                await loadUniverAssets();
+
+                const isExcel = /\.(xlsx|xls)$/i.test(file.name);
+                let data;
+                if (isExcel) {
+                    setSheetOverlay(true, `กำลังโหลด SheetJS...`);
+                    await loadSheetJsAssets();
+                    setSheetOverlay(true, `กำลังอ่าน ${file.name}...`);
+                    const buf = await file.arrayBuffer();
+                    const wb = XLSX.read(buf, { type: 'array' });
+                    data = await xlsxWorkbookToUniver(wb, file.name, buf);
+                } else {
+                    const text = await file.text();
+                    data = JSON.parse(text);
+                    if (!data || typeof data !== 'object' || !data.sheets) {
+                        throw new Error('รูปแบบไฟล์ไม่ถูกต้อง — คาดว่าเป็น SE workbook (.se / .se.json / .univer.json) หรือ Excel (.xlsx / .xls)');
+                    }
+                }
+                sheetState.mounted = false;
+                mountUniver(data, `เปิดจากไฟล์: ${file.name}`);
+                setSheetFile(handle, file.name, isExcel ? 'xlsx' : 'json');
             } catch (e) {
                 console.error(e);
-                alert('บันทึก .xlsx ไม่สำเร็จ: ' + (e && e.message || e));
+                alert('เปิดไฟล์ไม่สำเร็จ: ' + (e && e.message || e));
             } finally {
                 setSheetOverlay(false);
             }
