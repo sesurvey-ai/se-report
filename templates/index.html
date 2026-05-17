@@ -385,6 +385,18 @@
             pointer-events: auto;
         }
         #sheetEmptyMessage .sheet-empty-text b { color: #334155; }
+        /* Inline Open button inside the empty-state message so the user can
+           load a saved workbook before any data has been fetched (the real
+           Open button lives in the Univer ribbon which only renders once a
+           workbook is mounted — chicken-and-egg without this). */
+        .sheet-empty-open-btn {
+            display: inline-block; margin: 12px 0 0;
+            padding: 6px 18px; font-size: 13px; font-family: inherit;
+            background: #2563eb; color: #fff;
+            border: 1px solid #1d4ed8; border-radius: 4px;
+            cursor: pointer; line-height: 1.4;
+        }
+        .sheet-empty-open-btn:hover { background: #1d4ed8; }
 
         /* Pivot dark theme */
         #pivotView { overflow: auto; }
@@ -2573,7 +2585,9 @@
         // messages don't linger across mount attempts.
         const SHEET_EMPTY_DEFAULT_HTML =
             'ยังไม่มีข้อมูล — กรุณา Fetch ก่อน แล้วกลับมาที่นี่<br>' +
-            'หรือกดปุ่ม <b>Open</b> เพื่อโหลด workbook ที่บันทึกไว้';
+            'หรือโหลด workbook ที่บันทึกไว้:' +
+            '<br><button type="button" class="sheet-empty-open-btn" ' +
+            'onclick="openSheetFile()">📂 Open ไฟล์</button>';
 
         function setSheetEmptyText(html) {
             const el = document.querySelector('#sheetEmptyMessage > .sheet-empty-text');
