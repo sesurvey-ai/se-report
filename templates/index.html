@@ -413,6 +413,10 @@
             display: block;
             max-width: 100%;
             height: auto;  /* preserve aspect when CSS-scaled by max-width */
+            /* Soft fade between rebuilds — old content dims while we
+               crunch the new PDF, then the new content fades back in.
+               Cache hits set opacity in one shot so they stay instant. */
+            transition: opacity 0.22s ease;
         }
         .ps-margin-overlay {
             position: absolute; inset: 0;
@@ -3632,11 +3636,13 @@
             const myToken = ++_psPreviewState.buildToken;
             const ps = _readPageSetupFromForm();
             const cacheKey = JSON.stringify(ps);
+            const previewCanvas = document.getElementById('psPreviewCanvas');
             // Cache hit → skip the slow jsPDF + autoTable + Thai font
             // build entirely (and the PDF.js parse too) so toggling
             // between previously-seen states is instant. Don't touch
             // the loading status text on a hit — the preview swap
-            // should feel instant, not "loading...".
+            // should feel instant, not "loading...". Also leave opacity
+            // alone so we don't accidentally fade a perfectly-cached swap.
             if (_pdfDocCache.has(cacheKey)) {
                 const pdf = _pdfDocCache.get(cacheKey);
                 _pdfCacheTouch(cacheKey, pdf);
@@ -3648,12 +3654,19 @@
                 }
                 await _drawPsPreviewPage();
                 if (myToken !== _psPreviewState.buildToken) return;
+                if (previewCanvas) previewCanvas.style.opacity = '1';
                 _setPsPreviewStatus(
                     `Preview · ${pdf.numPages} หน้า · ค่าจะใช้จริงเมื่อกด "ถัดไป"`
                 );
                 return;
             }
             _setPsPreviewStatus('กำลังสร้าง preview...');
+            // Dim the old preview while we crunch the new PDF — gives the
+            // user a clear "we're working on it" cue, and pairs with the
+            // fade-back-up below so the new content appears smoothly
+            // instead of snapping in. CSS transition (0.22s) handles the
+            // actual animation.
+            if (previewCanvas) previewCanvas.style.opacity = '0.35';
             let blob;
             try {
                 await loadPdfJsAssets();
@@ -3661,11 +3674,13 @@
             } catch (e) {
                 console.warn('preview build failed:', e);
                 _setPsPreviewStatus('สร้าง preview ไม่สำเร็จ');
+                if (previewCanvas) previewCanvas.style.opacity = '1';
                 return;
             }
             if (myToken !== _psPreviewState.buildToken) return;
             if (!blob) {
                 _setPsPreviewStatus('Sheet ว่างเปล่าหรือ Print Area อยู่นอกข้อมูล');
+                if (previewCanvas) previewCanvas.style.opacity = '1';
                 return;
             }
             try {
@@ -3688,6 +3703,10 @@
                     _psPreviewState.pageNumber = 1;
                 }
                 await _drawPsPreviewPage();
+                // Fade the new content back up to full opacity. CSS
+                // transition turns this single property write into a
+                // smooth ~0.22s reveal that pairs with the dim above.
+                if (previewCanvas) previewCanvas.style.opacity = '1';
                 _setPsPreviewStatus(
                     `Preview · ${pdf.numPages} หน้า · ${Math.round(blob.size / 1024)} KB · `
                     + `ค่าจะใช้จริงเมื่อกด "ถัดไป"`
@@ -3695,6 +3714,7 @@
             } catch (e) {
                 console.warn('PDF.js render failed:', e);
                 _setPsPreviewStatus('แสดง preview ไม่สำเร็จ: ' + (e && e.message || e));
+                if (previewCanvas) previewCanvas.style.opacity = '1';
             }
         }
 
