@@ -1,4 +1,6 @@
 flask
+flask-compress
+orjson
 requests
 python-dotenv
 gunicorn

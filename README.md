@@ -78,7 +78,7 @@
 **Tuning constants** (ใน `app.py`):
 
 ```python
-APP_VERSION = '1.2.0'                          # แสดงที่ login page footer
+APP_VERSION = '1.4.0'                          # แสดงที่ login page footer
 
 CHUNK_DAYS = 30                                # ซอยช่วงวันที่เป็นก้อนละ 30 วัน
 PAGE_LIMIT = 5000                              # records ต่อ 1 request ของ iSurvey
@@ -113,6 +113,12 @@ se-report/
 
 ```env
 SECRET_KEY=<random_32+_char_string>
+
+# Optional — เปิดเฉพาะกรณีจำเป็น
+# FLASK_ENV=production            # บังคับให้ raise ถ้า SECRET_KEY หาย (กัน misconfig เงียบ)
+# SESSION_COOKIE_SECURE=false     # ปิดเฉพาะ local dev บน HTTP เท่านั้น (default = true)
+# LOG_LEVEL=INFO                  # DEBUG / INFO / WARNING / ERROR
+# PORT=5000                       # พอร์ตของ Flask dev server
 ```
 
 สุ่ม `SECRET_KEY` ได้ด้วย:
@@ -120,6 +126,12 @@ SECRET_KEY=<random_32+_char_string>
 ```bash
 python -c "import secrets; print(secrets.token_urlsafe(32))"
 ```
+
+> **Cookie security:** `SESSION_COOKIE_SECURE=true` เป็น default แปลว่า cookie
+> จะถูกส่งเฉพาะบน HTTPS เท่านั้น (เหมาะกับ production ที่ deploy ผ่าน
+> Dokploy/Traefik ซึ่งหน้า proxy ทำ TLS ให้) ถ้าเทสที่ local ผ่าน HTTP
+> ต้องตั้ง `SESSION_COOKIE_SECURE=false` ใน `.env` ไม่เช่นนั้น browser จะ
+> ไม่ส่ง cookie กลับมาและ login ไม่ติด
 
 > ระบบไม่มี user database ของตัวเอง — login ด้วย username/password ของ
 > **iSurvey โดยตรง** เซิร์ฟเวอร์เก็บ credentials ของแต่ละ user ไว้ใน
@@ -195,3 +207,15 @@ docker run -p 5000:5000 --env-file .env se-report
 - [x] Process-wide semaphore (`ISURVEY_MAX_CONCURRENT=30`) wrap iSurvey HTTP calls — cap concurrent connections จากระบบเรากัน iSurvey rate-limit
 - [x] Per-user fast mode — `FAST_MODE_USERS={'noppadol','noppadols'}` ได้ `MAX_WORKERS=6` (จาก default 4) ทำให้ดึง 1 ปี เร็วขึ้น ~33%; user อื่นไม่กระทบ
 - [x] `APP_VERSION` แสดงที่ login page footer (มุมขวาล่าง) ผ่าน Jinja context processor — admin ตรวจ build live ได้โดยไม่ต้องเช็ค server
+- [x] **Security hardening** — CSRF token ต่อ session (validate ทุก POST ยกเว้น `/login`), `SESSION_COOKIE_SECURE/HttpOnly/SameSite=Lax`, raise loudly ถ้า `SECRET_KEY` หายใน `FLASK_ENV=production`
+- [x] **Memory leak fix** — `_USER_CLIENTS` sweep ทุก 10 นาที ตัด sid ที่ idle เกิน session lifetime (8 ชม.) แทนที่จะค้างใน RAM จน restart
+- [x] **Server-side logging** — `logging.basicConfig` + `log.warning/exception` ทุก error path (login fail, CSRF reject, fetch_stream abort) — debug production ได้
+- [x] **Retry budget ลด** — `Retry(total=2, backoff_factor=0.5)` แทน `3 / 1.0` กันค้างยาวเกิน 9-min deadline
+- [x] **HTTP pool ขยาย** — `pool_maxsize=FAST_MAX_WORKERS*2` กัน urllib3 "pool is full" warning สำหรับ fast-mode users
+- [x] **Progress UX** — extrapolate per-chunk avg ไปทุก chunk แทน sum-of-reported เปลี่ยน label เป็น `Chunk X/Y — A/B records (P%)` (pct ไม่กระตุก/ถอย)
+- [x] **Cleanup** — ลบ `/fetch` sync route + `fetch_all_pages` ที่ frontend ไม่ใช้แล้ว, ลบการแก้ `_logged_in` จากนอก class
+- [x] **orjson** แทน stdlib json — encode SSE done event (full dataset 30-50 MB) เร็วขึ้น 5-10x, drop-in ผ่าน `_jdumps` helper
+- [x] **Flask-Compress** — gzip/zstd/br/deflate ทุก response รวม `text/event-stream` (streaming อยู่); index.html 153KB → 34KB (-77%), done event ลด wire payload ~80%
+- [x] **Lazy-load SheetJS** (~1.4 MB) — โหลดเฉพาะตอนกด Export / Save XLSX / Open .xlsx; first paint ของ table view เร็วขึ้นทันที
+- [x] **Excel import (.xlsx / .xls)** — ปุ่ม Open รับทั้ง `.univer.json` และ Excel; แปลง SheetJS workbook → Univer (values + formulas + merged cells; styles หายเพราะ SheetJS community ไม่อ่าน)
+- [x] **Fast-mode user icon** — username ใน `FAST_MODE_USERS` แสดงไอคอน ⚡ สีอำพันแทนรูปคน

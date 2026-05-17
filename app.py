@@ -1,5 +1,5 @@
 import concurrent.futures
-import json
+import logging
 import os
 import queue
 import secrets
@@ -8,20 +8,43 @@ import time
 from datetime import datetime, timedelta
 from functools import wraps
 
+import orjson
 import requests
 from dotenv import load_dotenv
 from flask import (
-    Flask, Response, flash, jsonify, redirect, render_template, request,
+    Flask, Response, jsonify, redirect, render_template, request,
     session, url_for,
 )
+from flask_compress import Compress
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
 load_dotenv()
 
+# Configure root logging before anything else creates a logger. Without this
+# all our app.logger / module-level log.* calls would be swallowed by Flask's
+# default "no handler" setup under Gunicorn — making prod debugging painful.
+logging.basicConfig(
+    level=os.getenv('LOG_LEVEL', 'INFO').upper(),
+    format='%(asctime)s %(levelname)s %(name)s: %(message)s',
+)
+log = logging.getLogger('se-report')
+
+
+def _jdumps(obj):
+    """JSON-encode via orjson (5-10x faster than stdlib on big payloads).
+
+    Returns str so existing f-string concatenations in the SSE generators
+    keep working. The big win is the final done event (full dataset, can
+    be 30-50 MB JSON for heavy users) — orjson cuts that serialization
+    time from ~2s to ~300ms on a typical fetch.
+    """
+    return orjson.dumps(obj).decode()
+
+
 # Bumped when releasing user-visible changes; displayed in the login footer
 # so admins can confirm which build is live without checking the server.
-APP_VERSION = '1.2.1'
+APP_VERSION = '1.4.0'
 
 # Tuning constants for parallel chunk fetching.
 # iSurvey rate-limits concurrent connections; 8 workers failed in prior tests.
@@ -71,16 +94,24 @@ class ISurveyClient:
         self.username = username
         self.password = password
         self.session = requests.Session()
+        # 2 retries + 0.5s backoff caps worst-case page fetch at roughly
+        # 3 attempts * REQUEST_TIMEOUT + 1.5s. The previous 3 retries / 1s
+        # backoff could spend ~6 min on a single bad page, leaving very
+        # little room before the 9-min generator deadline; tighter budget
+        # surfaces upstream issues faster instead of hiding them in retry.
         retry = Retry(
-            total=3,
-            backoff_factor=1,
+            total=2,
+            backoff_factor=0.5,
             status_forcelist=[502, 503, 504],
             allowed_methods=["GET", "POST"],
         )
+        # Pool sized for FAST_MAX_WORKERS so heavy users running 6 chunk
+        # threads in parallel don't trip urllib3's "connection pool is
+        # full" warning (which forces TCP teardown/reconnect per request).
         adapter = HTTPAdapter(
             max_retries=retry,
-            pool_connections=MAX_WORKERS * 2,
-            pool_maxsize=MAX_WORKERS * 2,
+            pool_connections=FAST_MAX_WORKERS * 2,
+            pool_maxsize=FAST_MAX_WORKERS * 2,
         )
         self.session.mount("https://", adapter)
         self.session.mount("http://", adapter)
@@ -176,40 +207,6 @@ class ISurveyClient:
             self._logged_in = False
             self.login()
             return _do_request()
-
-    def fetch_all_pages(self, date_from, date_to, report_type='enquiry'):
-        all_records = []
-        page = 1
-        start = 0
-
-        while True:
-            params = {
-                'con_date': 2,
-                'date_from': date_from,
-                'date_to': date_to,
-                'report_type': report_type,
-                'page': page,
-                'start': start,
-                'limit': PAGE_LIMIT,
-            }
-            body = self.get_report_page(params, timeout=REQUEST_TIMEOUT)
-
-            if isinstance(body, dict):
-                records = body.get('arr_data', body.get('data', []))
-                total = body.get('total', body.get('totalCount', 0))
-            else:
-                records = body
-                total = len(body)
-
-            all_records.extend(records)
-
-            if not records or len(all_records) >= total:
-                break
-
-            page += 1
-            start += PAGE_LIMIT
-
-        return all_records, total
 
     def fetch_chunk(
         self, df_str, dt_str, report_type, chunk_idx,
@@ -346,11 +343,52 @@ COLUMN_MAP = {
 }
 
 app = Flask(__name__)
-# SECRET_KEY signs the Flask session cookie. Falls back to a random per-
-# process key only as a dev convenience — in that mode sessions invalidate
-# on every restart (every user has to log in again). Production should
-# always set a stable SECRET_KEY in .env.
-app.secret_key = os.getenv('SECRET_KEY') or secrets.token_urlsafe(32)
+
+# gzip everything text-y, INCLUDING text/event-stream. Flask-Compress
+# wraps streaming responses incrementally (Z_SYNC_FLUSH per chunk) so
+# SSE events still arrive in real time — but the giant final done event
+# (full dataset) gets gzip'd, cutting the wire payload 5-10x. Login/
+# index HTML and JSON error responses ride along for free.
+app.config['COMPRESS_MIMETYPES'] = [
+    'text/html', 'text/css', 'text/xml', 'text/plain',
+    'application/json', 'application/javascript',
+    'text/event-stream',
+]
+# Default 500-byte threshold is fine; small SSE progress events skip
+# compression (overhead would dwarf the saving).
+Compress(app)
+
+# SECRET_KEY signs the Flask session cookie. In production a missing key
+# would silently fall back to a per-process random one — fine for local
+# dev (users just re-login on restart) but catastrophic under multi-worker
+# Gunicorn where each worker would sign with a different key. Raise loudly
+# when FLASK_ENV=production so misconfig surfaces at boot, not when a
+# user's session inexplicably stops working.
+SECRET_KEY = os.getenv('SECRET_KEY')
+if not SECRET_KEY:
+    if os.getenv('FLASK_ENV', '').lower() == 'production':
+        raise RuntimeError(
+            "SECRET_KEY env var is required when FLASK_ENV=production. "
+            "Generate one with: "
+            "python -c \"import secrets; print(secrets.token_urlsafe(32))\""
+        )
+    SECRET_KEY = secrets.token_urlsafe(32)
+    log.warning(
+        "SECRET_KEY not set — using ephemeral key. All sessions will be "
+        "invalidated on restart. Set SECRET_KEY in .env for stability."
+    )
+app.secret_key = SECRET_KEY
+
+# Cookie security defaults. SECURE=True requires HTTPS; for local dev over
+# plain HTTP set SESSION_COOKIE_SECURE=false in .env or the login cookie
+# won't be sent back by the browser. SameSite=Lax + HttpOnly together
+# block the basic CSRF/XSS cookie-exfiltration paths.
+_cookie_secure_env = os.getenv('SESSION_COOKIE_SECURE', 'true').lower()
+app.config.update(
+    SESSION_COOKIE_SECURE=_cookie_secure_env not in ('false', '0', 'no', ''),
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SAMESITE='Lax',
+)
 # Idle/auto-expire window for the Flask session cookie. The session is
 # marked permanent on login and refreshed (slid) on each request through
 # the require_login decorator, so this is effectively an inactivity timer.
@@ -358,9 +396,17 @@ app.permanent_session_lifetime = timedelta(hours=8)
 
 
 @app.context_processor
-def _inject_app_version():
-    """Expose APP_VERSION to every Jinja template (used by login footer)."""
-    return {'app_version': APP_VERSION}
+def _inject_template_globals():
+    """Expose APP_VERSION + csrf_token to every Jinja template.
+
+    csrf_token is empty on the login page (no session yet) but populated
+    once login completes — login.html doesn't need it because /login POST
+    is the bootstrap path that mints the token in the first place.
+    """
+    return {
+        'app_version': APP_VERSION,
+        'csrf_token': session.get('csrf_token', ''),
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -379,7 +425,39 @@ def _inject_app_version():
 # / docker setup that's not a concern.
 # ---------------------------------------------------------------------------
 _USER_CLIENTS = {}                  # sid -> ISurveyClient
+_USER_LAST_USED = {}                # sid -> monotonic timestamp of last touch
 _USER_CLIENTS_LOCK = threading.Lock()
+
+# Reap entries whose Flask session cookie would already have expired.
+# Without this, a user who logs in / closes the tab / never logs out
+# leaves their ISurveyClient pinned in memory until process restart.
+SESSION_IDLE_SECONDS = int(app.permanent_session_lifetime.total_seconds())
+_SWEEP_INTERVAL_SECONDS = 600       # 10-min throttle; sweep is O(N) over a small N
+_last_sweep_ts = 0.0                # protected by _USER_CLIENTS_LOCK
+
+
+def _maybe_sweep_stale(now):
+    """Drop sids untouched for longer than the session lifetime.
+
+    Call with _USER_CLIENTS_LOCK held. Throttled so the per-request hot
+    path doesn't walk the dict on every call. A swept entry would have
+    failed Flask's own cookie-expiry check anyway, so this only reclaims
+    memory — it never logs anyone out who would still have been valid.
+    """
+    global _last_sweep_ts
+    if now - _last_sweep_ts < _SWEEP_INTERVAL_SECONDS:
+        return
+    _last_sweep_ts = now
+    cutoff = now - SESSION_IDLE_SECONDS
+    stale = [sid for sid, ts in _USER_LAST_USED.items() if ts < cutoff]
+    for sid in stale:
+        _USER_CLIENTS.pop(sid, None)
+        _USER_LAST_USED.pop(sid, None)
+    if stale:
+        log.info(
+            "Swept %d stale session(s); %d active remain",
+            len(stale), len(_USER_CLIENTS),
+        )
 
 
 def get_user_client():
@@ -387,18 +465,30 @@ def get_user_client():
     sid = session.get('sid')
     if not sid:
         return None
+    now = time.monotonic()
     with _USER_CLIENTS_LOCK:
-        return _USER_CLIENTS.get(sid)
+        _maybe_sweep_stale(now)
+        client = _USER_CLIENTS.get(sid)
+        if client is not None:
+            _USER_LAST_USED[sid] = now
+    return client
 
 
 def _register_user_client(client):
     """Generate a fresh sid, store the client, and wire it to the session."""
     sid = secrets.token_urlsafe(32)
+    now = time.monotonic()
     with _USER_CLIENTS_LOCK:
         _USER_CLIENTS[sid] = client
+        _USER_LAST_USED[sid] = now
     session.permanent = True
     session['sid'] = sid
     session['username'] = client.username
+    # Mint a fresh CSRF token per session. Embedded in the index template
+    # as a <meta> tag and validated on every state-changing POST via
+    # require_csrf — protects /logout and /fetch-stream from cross-origin
+    # form submits that would otherwise inherit the user's session cookie.
+    session['csrf_token'] = secrets.token_urlsafe(32)
     return sid
 
 
@@ -406,38 +496,82 @@ def _drop_current_user_client():
     """Pop the session's sid and any registered ISurveyClient."""
     sid = session.pop('sid', None)
     session.pop('username', None)
+    session.pop('csrf_token', None)
     if sid:
         with _USER_CLIENTS_LOCK:
             _USER_CLIENTS.pop(sid, None)
+            _USER_LAST_USED.pop(sid, None)
+
+
+def _csrf_ok():
+    """Constant-time compare of submitted CSRF token to the session's."""
+    expected = session.get('csrf_token')
+    if not expected:
+        return False
+    provided = (
+        request.headers.get('X-CSRF-Token')
+        or request.form.get('csrf_token')
+        or ''
+    )
+    return secrets.compare_digest(expected, provided)
+
+
+def _sse_error(message):
+    """Build a one-shot SSE Response carrying a single error event.
+
+    The trailing ': end' comment is a flush trampoline — some reverse
+    proxies (Traefik in Dokploy, nginx) hold the last write until the
+    connection sees another byte, so without it the client may never
+    receive the error.
+    """
+    def gen():
+        yield f"event: error\ndata: {_jdumps({'error': message})}\n\n"
+        yield ': end\n\n'
+    return Response(gen(), mimetype='text/event-stream')
 
 
 def require_login(f):
     """Gate a route behind a logged-in iSurvey session.
 
-    HTML routes redirect to /login when unauthenticated. The
-    /fetch-stream and /fetch endpoints return JSON / SSE errors instead
-    so the frontend can surface them without losing in-flight UI state.
+    HTML routes redirect to /login when unauthenticated. /fetch-stream
+    returns an SSE-shaped error instead so the frontend's event-stream
+    reader can surface it without choking on an HTML redirect body.
     """
     @wraps(f)
     def decorated(*args, **kwargs):
         if get_user_client() is None:
-            # SSE endpoint — return an SSE-shaped error so the frontend's
-            # event-stream reader can show a useful message rather than
-            # choking on an HTML redirect body.
             if request.path == '/fetch-stream':
-                def _err():
-                    yield (
-                        'event: error\ndata: '
-                        + json.dumps({'error': 'Session หมดอายุ — กรุณา login ใหม่'})
-                        + '\n\n'
-                    )
-                return Response(_err(), mimetype='text/event-stream')
-            if request.path == '/fetch':
-                return jsonify({'error': 'Session หมดอายุ — กรุณา login ใหม่'}), 401
+                return _sse_error('Session หมดอายุ — กรุณา login ใหม่')
             return redirect(url_for('login_page'))
         # Touch the session to slide the expiry window forward.
         session.permanent = True
         session.modified = True
+        return f(*args, **kwargs)
+    return decorated
+
+
+def require_csrf(f):
+    """Validate the per-session CSRF token. Place after @require_login.
+
+    For /fetch-stream we return an SSE-shaped error so the in-page
+    progress UI can surface it cleanly; for plain POST handlers we
+    return 403 JSON. Frontend embeds the token in a <meta> tag and
+    sends it back as X-CSRF-Token (fetch API) or a hidden form field
+    (logout button).
+    """
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if not _csrf_ok():
+            log.warning(
+                "CSRF rejected for %s from %s (ua=%s)",
+                request.path, request.remote_addr,
+                request.headers.get('User-Agent', '?')[:80],
+            )
+            if request.path == '/fetch-stream':
+                return _sse_error(
+                    'CSRF token ไม่ถูกต้อง — กรุณา refresh หน้านี้แล้ว login ใหม่'
+                )
+            return jsonify({'error': 'CSRF token invalid'}), 403
         return f(*args, **kwargs)
     return decorated
 
@@ -462,16 +596,19 @@ def login_submit():
     try:
         client.login()
     except Exception as e:
+        log.warning("Login rejected for user %r: %s", username, e)
         return render_template(
             'login.html', error=str(e), username=username,
         ), 401
     # Replace any previous session for this browser before issuing the new sid.
     _drop_current_user_client()
     _register_user_client(client)
+    log.info("Login OK for user %r", username)
     return redirect(url_for('index'))
 
 
 @app.route('/logout', methods=['POST'])
+@require_csrf
 def logout():
     _drop_current_user_client()
     return redirect(url_for('login_page'))
@@ -480,39 +617,21 @@ def logout():
 @app.route('/')
 @require_login
 def index():
+    username = session.get('username', '')
     return render_template(
         'index.html',
         column_map=COLUMN_MAP,
-        username=session.get('username', ''),
+        username=username,
+        # Drives the lightning-bolt icon in the user-chip — visual cue
+        # that this account is in the FAST_MODE_USERS whitelist and gets
+        # FAST_MAX_WORKERS instead of MAX_WORKERS.
+        is_fast_user=username.lower() in FAST_MODE_USERS,
     )
-
-
-@app.route('/fetch', methods=['POST'])
-@require_login
-def fetch():
-    date_from = request.form.get('date_from', '')
-    date_to = request.form.get('date_to', '')
-    report_type = request.form.get('report_type', 'enquiry')
-
-    try:
-        df = datetime.strptime(date_from, '%Y-%m-%d').strftime('%d/%m/%Y')
-        dt = datetime.strptime(date_to, '%Y-%m-%d').strftime('%d/%m/%Y')
-    except ValueError:
-        return jsonify({'error': 'รูปแบบวันที่ไม่ถูกต้อง'}), 400
-
-    client = get_user_client()
-    try:
-        records, total = client.fetch_all_pages(df, dt, report_type)
-    except Exception as e:
-        client._logged_in = False
-        return jsonify({'error': str(e)}), 500
-
-    columns = COLUMN_MAP.get(report_type)
-    return jsonify({'total': total, 'data': records, 'columns': columns})
 
 
 @app.route('/fetch-stream', methods=['POST'])
 @require_login
+@require_csrf
 def fetch_stream():
     date_from = request.form.get('date_from', '')
     date_to = request.form.get('date_to', '')
@@ -522,14 +641,13 @@ def fetch_stream():
         df_date = datetime.strptime(date_from, '%Y-%m-%d')
         dt_date = datetime.strptime(date_to, '%Y-%m-%d')
     except ValueError:
-        def error_gen():
-            yield f"event: error\ndata: {json.dumps({'error': 'รูปแบบวันที่ไม่ถูกต้อง'})}\n\n"
-        return Response(error_gen(), mimetype='text/event-stream')
+        return _sse_error('รูปแบบวันที่ไม่ถูกต้อง')
+
+    if df_date > dt_date:
+        return _sse_error('วันที่เริ่มต้นต้องไม่อยู่หลังวันที่สิ้นสุด')
 
     if (dt_date - df_date).days > 730:
-        def range_error():
-            yield f"event: error\ndata: {json.dumps({'error': 'ช่วงวันที่เกิน 2 ปี กรุณาเลือกช่วงที่สั้นกว่านี้'})}\n\n"
-        return Response(range_error(), mimetype='text/event-stream')
+        return _sse_error('ช่วงวันที่เกิน 2 ปี กรุณาเลือกช่วงที่สั้นกว่านี้')
 
     # Split the date range into chunks for parallel fetching.
     chunks = []
@@ -555,8 +673,9 @@ def fetch_stream():
         try:
             client.login()
         except Exception as e:
-            client._logged_in = False
-            yield f"event: error\ndata: {json.dumps({'error': f'Login failed: {e}'})}\n\n"
+            log.exception("fetch_stream: pre-fetch login failed for %r", client.username)
+            yield f"event: error\ndata: {_jdumps({'error': f'Login failed: {e}'})}\n\n"
+            yield ': end\n\n'
             return
 
         deadline = time.monotonic() + 540
@@ -598,10 +717,20 @@ def fetch_stream():
                         'total': ev_data['chunk_total'],
                     }
                     total_fetched = sum(p['fetched'] for p in chunk_progress.values())
-                    total_est = sum(p['total'] for p in chunk_progress.values())
+                    # Extrapolate per-chunk avg to ALL chunks so total_est
+                    # stays roughly stable as new chunks come online. The
+                    # naive sum-of-reported behaviour caused the progress
+                    # percentage to bounce backward whenever a fresh chunk
+                    # reported its first page (denominator suddenly grew
+                    # while numerator stayed put).
+                    avg = (
+                        sum(p['total'] for p in chunk_progress.values())
+                        / len(chunk_progress)
+                    )
+                    total_est = int(avg * chunks_total)
                     yield (
                         f"event: progress\ndata: "
-                        f"{json.dumps({'fetched': total_fetched, 'total': total_est, 'page': chunks_done + 1})}\n\n"
+                        f"{_jdumps({'fetched': total_fetched, 'total': total_est, 'chunks_done': chunks_done, 'chunks_total': chunks_total})}\n\n"
                     )
                 elif ev_type == 'chunk_done':
                     chunk_results[ev_data['chunk_idx']] = ev_data['records']
@@ -613,8 +742,11 @@ def fetch_stream():
 
             if error_msg:
                 executor.shutdown(wait=False, cancel_futures=True)
-                client._logged_in = False
-                yield f"event: error\ndata: {json.dumps({'error': error_msg})}\n\n"
+                log.warning(
+                    "fetch_stream: user=%r range=%s..%s aborted: %s",
+                    client.username, date_from, date_to, error_msg,
+                )
+                yield f"event: error\ndata: {_jdumps({'error': error_msg})}\n\n"
                 # SSE comment to force a flush — some reverse proxies
                 # (Traefik in Dokploy, nginx) hold the last write until
                 # the connection sees another byte. Without this the
@@ -632,7 +764,7 @@ def fetch_stream():
             columns = COLUMN_MAP.get(report_type)
             yield (
                 f"event: done\ndata: "
-                f"{json.dumps({'total': len(all_records), 'data': all_records, 'columns': columns})}\n\n"
+                f"{_jdumps({'total': len(all_records), 'data': all_records, 'columns': columns})}\n\n"
             )
             # Same flush trampoline as the error branch above. The 'done'
             # payload is large (full dataset), so the proxy is more likely
