@@ -5,6 +5,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{ csrf_token }}">
     <title>SE Report</title>
+    <!-- IBM Plex used by the Page Setup modal's "Print UI" design.
+         Only loaded for the Thai script + the mono weights actually
+         used (300/400/500/600/700 for Sans Thai, 400/500 for Mono).
+         Browsers cache /css2 across reloads + display=swap means the
+         fallback renders first if the woff2s are still in flight. -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Thai:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <!-- SheetJS, jQuery + jQuery UI + PivotTable.js + Plotly, and Univer
          are ALL lazy-loaded on demand. SheetJS (~1.4 MB) is loaded the
          first time the user clicks Export / Save as XLSX / Open xlsx —
@@ -362,54 +370,71 @@
            page count + Cancel/Next, big canvas preview on the left with
            dashed-blue margin overlay, settings sidebar on the right.
            Hard-coded light theme (matches Univer's light-only style). */
-        /* ===== Page Setup modal — modern refresh =====
-           Softer slate palette, larger radii, refined spacing, subtler
-           dividers, and a single primary blue accent. Scoped under
-           .ps-google-card so other modals keep their original chrome. */
+        /* ===== Page Setup modal — "Print UI" design =====
+           Cream / ink / accent palette adapted from the Claude design
+           share. Scoped under .ps-google-card so other modals keep
+           their original chrome. The Univer / sheet view itself
+           continues to use the existing slate look; this palette only
+           takes effect once the user opens Page Setup. */
         .ps-google-card {
-            background: #fff;
+            --bg: #ffffff;
+            --ink: #1a3a4d;
+            --accent: #c44a2c;
+            --paper: #ffffff;
+            --ink-12: rgba(26, 58, 77, 0.12);
+            --ink-18: rgba(26, 58, 77, 0.18);
+            --ink-32: rgba(26, 58, 77, 0.32);
+            --ink-55: rgba(26, 58, 77, 0.55);
+            --ink-72: rgba(26, 58, 77, 0.72);
+            --surface:   #ffffff;
+            --surface-2: #f4f5f7;
+            background: var(--paper);
             border-radius: 14px;
             width: 100%; max-width: 1280px;
             height: 92vh; max-height: 92vh;
             display: flex; flex-direction: column;
             box-shadow:
-                0 1px 3px rgba(15, 23, 42, 0.06),
-                0 24px 60px -8px rgba(15, 23, 42, 0.28);
+                0 1px 3px rgba(0,0,0,0.06),
+                0 24px 60px -8px rgba(26, 58, 77, 0.28);
             font-size: 14px;
-            color: #0f172a;
-            font-family: 'Segoe UI', Tahoma, sans-serif;
+            color: var(--ink);
+            font-family: 'IBM Plex Sans Thai', system-ui, -apple-system,
+                         'Segoe UI', Tahoma, sans-serif;
+            font-feature-settings: "ss01", "cv01";
+            -webkit-font-smoothing: antialiased;
             overflow: hidden;
         }
         .ps-google-topbar {
             display: flex; align-items: center; gap: 14px;
             padding: 16px 22px;
-            border-bottom: 1px solid #eef0f4;
-            background: #fff;
+            border-bottom: 1px solid var(--ink-12);
+            background: var(--paper);
         }
         .ps-google-title {
-            font-size: 17px; font-weight: 600; color: #0f172a;
+            font-size: 18px; font-weight: 600; color: var(--ink);
             letter-spacing: -0.01em;
         }
         .ps-google-count {
-            font-size: 12px; color: #64748b;
-            background: #f1f5f9;
-            padding: 4px 10px;
-            border-radius: 999px;
-            font-weight: 500;
+            font-size: 11px;
+            color: var(--ink-55);
+            font-family: 'IBM Plex Mono', ui-monospace, monospace;
+            font-weight: 400;
+            letter-spacing: 0.02em;
         }
         .ps-google-spacer { flex: 1; }
         .ps-google-body { flex: 1 1 auto; display: flex; min-height: 0; }
         .ps-google-footbar {
             display: flex; align-items: center; gap: 8px;
-            padding: 12px 22px;
-            border-top: 1px solid #eef0f4;
-            background: #fff;
+            padding: 12px 24px;
+            border-top: 1px solid var(--ink-12);
+            background: var(--surface);
         }
         .ps-preview-area {
             flex: 1 1 auto; min-width: 0;
             display: flex; flex-direction: column;
-            background: #f3f4f6;
-            padding: 28px;
+            position: relative;
+            background: var(--surface-2);
+            padding: 28px 28px 80px 28px;
             gap: 14px;
         }
         .ps-canvas-wrap {
@@ -421,17 +446,18 @@
         .ps-canvas-inner {
             position: relative;
             display: inline-block;
-            background: #fff;
-            border-radius: 4px;
+            background: var(--paper);
+            border-radius: 2px;
             box-shadow:
-                0 1px 2px rgba(15, 23, 42, 0.08),
-                0 8px 24px rgba(15, 23, 42, 0.10);
+                0 1px 1px rgba(0,0,0,0.04),
+                0 4px 16px rgba(0,0,0,0.06),
+                0 24px 60px -16px rgba(0,0,0,0.18);
         }
         #psPreviewCanvas {
             display: block;
             max-width: 100%;
             height: auto;  /* preserve aspect when CSS-scaled by max-width */
-            border-radius: 4px;
+            border-radius: 2px;
         }
         .ps-margin-overlay {
             position: absolute; inset: 0;
@@ -439,162 +465,250 @@
         }
         .ps-margin-line {
             position: absolute;
-            border-color: #6366f1;
+            border-color: var(--ink-18);
             border-style: dashed;
             border-width: 0;
-            opacity: 0.7;
         }
         .ps-margin-line-top    { top: 0; left: 0; right: 0; border-top-width: 1px; }
         .ps-margin-line-bottom { bottom: 0; left: 0; right: 0; border-top-width: 1px; }
         .ps-margin-line-left   { top: 0; bottom: 0; left: 0; border-left-width: 1px; }
         .ps-margin-line-right  { top: 0; bottom: 0; right: 0; border-left-width: 1px; }
-        .ps-preview-status {
-            font-size: 11px; color: #64748b;
-            text-align: center;
-            font-family: ui-monospace, Consolas, monospace;
-        }
+        /* Page indicator pill, floating bottom-center of the preview
+           pane (like the design's .page-indicator). */
         .ps-page-nav {
-            display: flex; align-items: center; gap: 4px;
-            justify-content: center;
-            padding: 4px 0;
+            position: absolute;
+            bottom: 20px; left: 50%; transform: translateX(-50%);
+            display: inline-flex; align-items: center; gap: 4px;
+            background: color-mix(in oklab, var(--bg) 80%, white);
+            border: 1px solid var(--ink-12);
+            border-radius: 100px;
+            padding: 4px;
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            z-index: 2;
         }
         .ps-nav-btn {
-            background: #fff;
-            border: 1px solid #e2e8f0;
-            color: #475569;
-            width: 32px; height: 32px;
+            background: transparent;
+            border: 0;
+            color: var(--ink-72);
+            width: 26px; height: 26px;
             display: inline-flex; align-items: center; justify-content: center;
-            border-radius: 8px;
+            border-radius: 100px;
             cursor: pointer;
-            font-size: 12px;
+            font-size: 14px;
             font-family: inherit;
             line-height: 1;
-            transition: background 0.12s, border-color 0.12s, color 0.12s;
+            transition: background 0.15s, color 0.15s;
         }
-        .ps-nav-btn:hover { background: #f8fafc; border-color: #cbd5e1; color: #0f172a; }
+        .ps-nav-btn:hover { background: var(--ink-12); color: var(--ink); }
         .ps-nav-btn:disabled { opacity: 0.35; cursor: not-allowed; }
         .ps-nav-label {
-            font-size: 12px; color: #475569; padding: 0 10px;
+            font-family: 'IBM Plex Mono', ui-monospace, monospace;
+            font-size: 11px; color: var(--ink-72);
+            padding: 0 8px;
             font-variant-numeric: tabular-nums;
-            min-width: 48px; text-align: center;
+            letter-spacing: 0.02em;
+            min-width: 40px; text-align: center;
         }
         .ps-google-sidebar {
-            flex: 0 0 320px;
-            border-left: 1px solid #eef0f4;
+            flex: 0 0 380px;
+            border-left: 1px solid var(--ink-12);
             overflow: auto;
-            background: #fafbfc;
+            background: var(--surface);
+            display: flex; flex-direction: column;
+        }
+        .ps-google-sidebar::-webkit-scrollbar { width: 6px; }
+        .ps-google-sidebar::-webkit-scrollbar-thumb {
+            background: var(--ink-18); border-radius: 3px;
         }
         .ps-google-sidebar .modal-form {
-            padding: 20px 22px;
+            padding: 22px 24px 18px;
         }
-        /* Modern segmented control for orientation. Tight pair with a
-           gentle background that distinguishes the selected option. */
+        /* Segmented control with the design's sliding-thumb feel.
+           Background gives the "track" colour; selected option pops
+           white with a subtle shadow. */
         .ps-radio-bar {
             display: flex; gap: 0;
-            background: #f1f5f9;
-            border-radius: 8px;
+            background: color-mix(in oklab, var(--bg) 80%, var(--ink));
             padding: 3px;
+            border-radius: 7px;
+            border: 1px solid var(--ink-12);
         }
         .ps-radio-bar label {
             flex: 1; text-align: center;
             border: none;
-            padding: 7px 10px;
-            border-radius: 6px;
+            padding: 8px 12px;
+            border-radius: 5px;
             cursor: pointer;
-            font-size: 13px;
+            font-size: 12.5px;
             background: transparent;
-            color: #64748b;
-            transition: background 0.16s, color 0.16s, box-shadow 0.16s;
+            color: var(--ink-55);
+            transition: background 0.2s, color 0.2s, box-shadow 0.2s;
         }
         .ps-radio-bar label:has(input:checked) {
-            background: #fff;
-            color: #0f172a;
-            font-weight: 600;
-            box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
+            background: var(--paper);
+            color: var(--ink);
+            font-weight: 500;
+            box-shadow:
+                0 1px 2px rgba(0,0,0,0.06),
+                inset 0 1px 0 rgba(255,255,255,0.6);
         }
         .ps-radio-bar input { display: none; }
-        /* Sub-form shown when a "Custom…" preset is picked. */
+        /* Inline % input shown when "กำหนดตัวเลขเอง" is selected. */
         .ps-sub-form {
-            margin-top: 8px;
-            padding: 10px 12px;
-            background: #f1f5f9;
-            border-radius: 6px;
+            margin-top: 0;
+            padding: 0;
+            background: transparent;
+            border-radius: 0;
         }
-        /* Flat group — used to label related options without the
-           expand/collapse interaction. Replaces the old <details>
-           sections; user wanted everything visible at once. */
+        /* Section divider — small uppercase mono label on the right
+           plus a top border, like the design's .divider block. */
         .ps-group {
             margin-top: 6px;
-            border-top: 1px solid #eef0f4;
+            padding-top: 14px;
+            border-top: 1px solid var(--ink-12);
         }
         .ps-group-title {
-            padding: 12px 0 8px 0;
-            font-size: 11.5px; font-weight: 600;
-            color: #6b7280;
-            text-transform: uppercase;
-            letter-spacing: 0.04em;
+            padding: 0 0 10px 0;
+            font-size: 11px; font-weight: 600;
+            color: var(--ink);
+            letter-spacing: 0;
+            text-transform: none;
         }
         .ps-group-body {
-            padding: 0 0 14px 0;
-            display: flex; flex-direction: column; gap: 8px;
+            padding: 0 0 6px 0;
+            display: flex; flex-direction: column; gap: 4px;
         }
-        /* Modal-body form overrides scoped to the Page Setup card.
-           Outside this card, .modal-body keeps its original chrome. */
-        .ps-google-card .modal-body .form-row {
+        /* Form-row override — Page Setup uses .modal-form (not the
+           shared .modal-body) so the global form-row rule never
+           applied. Re-declare here so labels stack above inputs and
+           the selects can stretch full-width like the design. */
+        .ps-google-card .form-row {
+            display: flex; flex-direction: column;
             margin-bottom: 16px;
-            gap: 7px;
+            gap: 8px;
         }
-        .ps-google-card .modal-body .form-row > label.field-label {
+        .ps-google-card .form-row > label.field-label {
             font-size: 11.5px;
-            color: #6b7280;
+            color: var(--ink-72);
             font-weight: 500;
             text-transform: none;
             letter-spacing: 0;
+            font-family: inherit;
         }
-        .ps-google-card .modal-body select,
-        .ps-google-card .modal-body input[type=number],
-        .ps-google-card .modal-body input[type=text] {
-            padding: 8px 10px;
+        .ps-google-card select,
+        .ps-google-card input[type=number],
+        .ps-google-card input[type=text] {
+            width: 100%;
+            padding: 11px 14px;
             font-size: 13px;
-            border: 1px solid #e2e8f0;
-            border-radius: 6px;
-            background: #fff;
-            color: #0f172a;
-            transition: border-color 0.12s, box-shadow 0.12s;
+            border: 1px solid var(--ink-18);
+            border-radius: 8px;
+            background: var(--paper);
+            color: var(--ink);
+            font-family: inherit;
+            transition: border-color 0.15s, box-shadow 0.15s;
         }
-        .ps-google-card .modal-body select:hover,
-        .ps-google-card .modal-body input[type=number]:hover,
-        .ps-google-card .modal-body input[type=text]:hover { border-color: #cbd5e1; }
-        .ps-google-card .modal-body select:focus,
-        .ps-google-card .modal-body input[type=number]:focus,
-        .ps-google-card .modal-body input[type=text]:focus {
+        /* Hide native select arrow + draw our own chevron via SVG. The
+           SVG is inline-encoded so no extra HTTP fetch + recolours
+           cleanly via stroke = ink-55 equivalent. */
+        .ps-google-card select {
+            appearance: none;
+            -webkit-appearance: none;
+            padding-right: 36px;
+            background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%231a3a4d' stroke-opacity='0.55' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'><polyline points='4 6 8 10 12 6'/></svg>");
+            background-repeat: no-repeat;
+            background-position: right 12px center;
+            background-size: 16px 16px;
+            cursor: pointer;
+        }
+        .ps-google-card input[type=number] {
+            font-family: 'IBM Plex Mono', ui-monospace, monospace;
+            font-size: 12.5px;
+            text-align: center;
+            width: 64px;  /* row/col inputs stay compact, override the 100% */
+            padding: 8px 10px;
+        }
+        .ps-google-card select:hover,
+        .ps-google-card input[type=number]:hover,
+        .ps-google-card input[type=text]:hover {
+            border-color: var(--ink-32);
+        }
+        .ps-google-card select:focus,
+        .ps-google-card input[type=number]:focus,
+        .ps-google-card input[type=text]:focus {
             outline: none;
-            border-color: #3b82f6;
-            box-shadow: 0 0 0 3px rgba(59,130,246,0.15);
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent) 18%, transparent);
         }
-        /* Buttons inside the Page Setup card — tighter, more refined. */
+        /* Toggle switch — replaces the plain checkbox for B&W / Header
+           / Footer. Track + knob behave like the design's .toggle-sw.
+           Scoped to .ps-group .check-row so only the boolean-style
+           rows become switches (Print Titles row, with its number
+           inputs, sits inside .repeat-* labels and isn't a checkbox). */
+        .ps-google-card .ps-group .check-row {
+            display: flex; align-items: center; justify-content: space-between;
+            gap: 12px;
+            padding: 6px 0;
+            font-size: 13px;
+            color: var(--ink);
+            cursor: pointer;
+        }
+        .ps-google-card .ps-group .check-row input[type=checkbox] {
+            appearance: none;
+            -webkit-appearance: none;
+            width: 32px; height: 19px;
+            background: var(--ink-18);
+            border-radius: 100px;
+            position: relative;
+            cursor: pointer;
+            transition: background 0.2s;
+            flex-shrink: 0;
+            margin: 0;
+            order: 2;  /* put the switch on the right, text on the left */
+        }
+        .ps-google-card .ps-group .check-row input[type=checkbox]::after {
+            content: '';
+            position: absolute;
+            top: 2px; left: 2px;
+            width: 15px; height: 15px;
+            background: var(--paper);
+            border-radius: 100px;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.18);
+            transition: transform 0.2s cubic-bezier(.3,.7,.3,1);
+        }
+        .ps-google-card .ps-group .check-row input[type=checkbox]:checked {
+            background: var(--accent);
+        }
+        .ps-google-card .ps-group .check-row input[type=checkbox]:checked::after {
+            transform: translateX(13px);
+        }
+        /* Buttons */
         .ps-google-card .modal-btn {
-            padding: 8px 16px;
+            padding: 10px 18px;
             font-size: 13px;
             font-weight: 500;
             border-radius: 8px;
             line-height: 1.4;
             border: 1px solid transparent;
-            transition: background 0.12s, border-color 0.12s, box-shadow 0.12s, color 0.12s;
+            font-family: inherit;
+            cursor: pointer;
+            transition: background 0.15s, border-color 0.15s, color 0.15s, transform 0.05s;
         }
+        .ps-google-card .modal-btn:active { transform: translateY(0.5px); }
         .ps-google-card .modal-btn.primary {
-            background: #2563eb; color: #fff; border-color: #2563eb;
-            box-shadow: 0 1px 2px rgba(37, 99, 235, 0.25);
+            background: var(--ink); color: var(--paper); border-color: var(--ink);
         }
         .ps-google-card .modal-btn.primary:hover {
-            background: #1d4ed8; border-color: #1d4ed8;
-            box-shadow: 0 2px 6px rgba(37, 99, 235, 0.35);
+            background: color-mix(in oklab, var(--ink) 85%, black);
+            border-color: color-mix(in oklab, var(--ink) 85%, black);
         }
         .ps-google-card .modal-btn.secondary {
-            background: #fff; color: #475569; border-color: #e2e8f0;
+            background: transparent; color: var(--ink-72);
+            border-color: transparent;
         }
         .ps-google-card .modal-btn.secondary:hover {
-            background: #f8fafc; border-color: #cbd5e1; color: #0f172a;
+            background: var(--ink-12); color: var(--ink);
         }
         @media (max-width: 1100px) {
             .ps-google-card {
@@ -604,9 +718,9 @@
             .ps-google-body { flex-direction: column; }
             .ps-google-sidebar {
                 flex: 0 0 auto; border-left: none;
-                border-top: 1px solid #eef0f4; max-height: 50vh;
+                border-top: 1px solid var(--ink-12); max-height: 50vh;
             }
-            .ps-preview-area { padding: 14px; }
+            .ps-preview-area { padding: 14px 14px 70px 14px; }
         }
 
         /* Old preview iframe (kept for backwards compat — no longer
