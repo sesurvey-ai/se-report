@@ -3277,16 +3277,20 @@
         }
 
         // Excel border style names (xl/styles.xml) → Univer BorderStyleTypes
-        // numeric values. Univer's enum (from sheets-ui source):
-        //   1=THIN, 2=HAIR, 3=DOTTED, 4=DASHED, 5=DOUBLE, 6=MEDIUM,
-        //   7=MEDIUM_DASHED, 8=MEDIUM_DASH_DOT, 9=MEDIUM_DASH_DOT_DOT,
-        //   10=SLANT_DASH_DOT, 11=THICK
+        // numeric values. Univer's actual enum (from @univerjs/core):
+        //   1=THIN, 2=HAIR, 3=DOTTED, 4=DASHED, 5=DOUBLE,
+        //   6=MEDIUM_DASHED, 7=MEDIUM_DASH_DOT, 8=MEDIUM_DASH_DOT_DOT,
+        //   9=SLANT_DASH_DOT, 10=MEDIUM, 11=THICK,
+        //   12=DASH_DOT, 13=DASH_DOT_DOT
+        // Notable: MEDIUM is 10 (not 6) and the dashed variants of MEDIUM
+        // occupy 6-8 — easy to mis-map, which made Excel "medium" borders
+        // render as medium-dashed in earlier versions of this code.
         // Unknown styles fall back to THIN.
         const _EXCEL_BORDER_STYLE_TO_UNIVER = {
-            thin: 1, hair: 2, dotted: 3, dashed: 4, double: 5, medium: 6,
-            mediumDashed: 7, mediumDashDot: 8, mediumDashDotDot: 9,
-            slantDashDot: 10, thick: 11,
-            dashDot: 4, dashDotDot: 4,
+            thin: 1, hair: 2, dotted: 3, dashed: 4, double: 5,
+            mediumDashed: 6, mediumDashDot: 7, mediumDashDotDot: 8,
+            slantDashDot: 9, medium: 10, thick: 11,
+            dashDot: 12, dashDotDot: 13,
         };
 
         // Excel uses 8-char ARGB ("FF000000") — Univer wants 6-char hex
@@ -3383,19 +3387,42 @@
                 }
             }
 
-            // cellXfs[i] = { borderId, fillId, fontId } — the style records
-            // that cells reference via their `s` attribute.
+            // cellXfs[i] = { borderId, fillId, fontId, alignment } — the
+            // style records that cells reference via their `s` attribute.
+            // Alignment lives in a child <alignment horizontal=... vertical=...
+            // wrapText=...> element on the xf when applyAlignment is set.
             const cellXfsEl = stylesDoc.getElementsByTagName('cellXfs')[0];
             const cellXfs = [];
             if (cellXfsEl) {
                 for (const xfEl of Array.from(cellXfsEl.children)) {
+                    const alignEl = xfEl.getElementsByTagName('alignment')[0];
+                    let align = null;
+                    if (alignEl) {
+                        align = {
+                            horizontal: alignEl.getAttribute('horizontal'),
+                            vertical: alignEl.getAttribute('vertical'),
+                            wrapText: alignEl.getAttribute('wrapText') === '1',
+                        };
+                    }
                     cellXfs.push({
                         borderId: parseInt(xfEl.getAttribute('borderId') || '0'),
                         fillId: parseInt(xfEl.getAttribute('fillId') || '0'),
                         fontId: parseInt(xfEl.getAttribute('fontId') || '0'),
+                        align,
                     });
                 }
             }
+
+            // Excel horizontal/vertical alignment → Univer's HorizontalAlign /
+            // VerticalAlign enums: 1=LEFT/TOP, 2=CENTER/MIDDLE, 3=RIGHT/BOTTOM.
+            const HALIGN_MAP = {
+                left: 1, center: 2, centerContinuous: 2, right: 3,
+                justify: 4, distributed: 4, fill: 0, general: 0,
+            };
+            const VALIGN_MAP = {
+                top: 1, center: 2, middle: 2, bottom: 3,
+                justify: 4, distributed: 4,
+            };
 
             // Convert one xf record + the style tables → Univer cell style obj
             const xfToStyle = (xf) => {
@@ -3424,6 +3451,15 @@
                     if (font.rgb) us.cl = { rgb: _argbToHex(font.rgb) };
                     if (font.size && font.size !== 11) us.fs = font.size;
                     if (font.family && font.family !== 'Calibri') us.ff = font.family;
+                }
+                if (xf.align) {
+                    const h = HALIGN_MAP[xf.align.horizontal];
+                    const v = VALIGN_MAP[xf.align.vertical];
+                    if (h) us.ht = h;
+                    if (v) us.vt = v;
+                    // Univer TextWrap: 0=OVERFLOW (default), 3=WRAP. Only set
+                    // when explicit so cells without wrapText stay overflow.
+                    if (xf.align.wrapText) us.tb = 3;
                 }
                 return Object.keys(us).length ? us : null;
             };
