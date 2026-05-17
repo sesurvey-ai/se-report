@@ -3,13 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ csrf_token }}">
     <title>SE Report</title>
-    <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
-    <!-- jQuery + jQuery UI + PivotTable.js + Plotly are lazy-loaded the
-         first time the user switches to the Pivot tab. Plotly alone is
-         ~1MB gzip, so eagerly loading these for users who never open the
-         pivot view is wasteful. See loadPivotAssets() in the inline
-         script below. -->
+    <!-- SheetJS, jQuery + jQuery UI + PivotTable.js + Plotly, and Univer
+         are ALL lazy-loaded on demand. SheetJS (~1.4 MB) is loaded the
+         first time the user clicks Export / Save as XLSX / Open xlsx —
+         saves the download for users who only browse the table view.
+         See loadSheetJsAssets / loadPivotAssets / loadUniverAssets in
+         the inline script below. -->
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
@@ -247,34 +248,82 @@
             flex-direction: column;
             color: #1e293b;  /* break dark-theme color inheritance */
         }
-        #sheetToolbar {
-            display: flex; gap: 8px; align-items: center;
-            padding: 8px 12px; margin-bottom: 8px;
-            border: 1px solid #e2e8f0; border-radius: 8px;
-            background: #fff;
-            flex-wrap: wrap;
-            flex-shrink: 0;
-        }
-        .sheet-btn {
-            padding: 6px 12px; font-size: 12px;
-            border: 1px solid #cbd5e1; border-radius: 6px;
-            background: transparent; color: #1e293b;
-            cursor: pointer; transition: all 0.15s;
+        /* Crosshair toggle injected as a 5th tab in Univer's tab bar
+           (next to Start/Insert/Formulas/Data). Sits in the same flex row
+           as the real tabs but does NOT carry role="tab" so Univer's
+           ribbon doesn't try to switch panels when it's clicked.
+           Default styling mirrors the real tabs at rest; amber "active"
+           palette when the highlight is on — same visual story as the
+           fast-user chip in the page header. */
+        .univer-crosshair-tab {
+            padding: 4px 12px;
+            font-size: 13px;
+            border: 1px solid transparent;
+            background: transparent;
+            color: inherit;
+            cursor: pointer;
+            border-radius: 4px;
             font-family: inherit;
+            line-height: 1.2;
+            white-space: nowrap;
         }
-        .sheet-btn:hover { background: #f1f5f9; }
-        .sheet-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-        .sheet-btn-primary {
-            border-color: #3b82f6; background: #2563eb; color: #fff;
+        .univer-crosshair-tab:hover { background: rgba(15, 23, 42, 0.06); }
+        .univer-crosshair-tab.active {
+            background: #fef3c7;
+            border-color: #fbbf24;
+            color: #92400e;
         }
-        .sheet-btn-primary:hover { background: #1d4ed8; color: #fff; }
-        #sheetDirtyIndicator {
-            display: none; color: #dc2626; font-size: 12px;
+        .univer-crosshair-tab.active:hover { background: #fde68a; }
+        /* File-ops button group injected at the head of Univer's ribbon row
+           (left of Undo). Holds Refresh Data / Open / Save / Save XLSX +
+           a dirty indicator. Visual style mirrors Univer's own buttons —
+           a thin border + light hover — except Save which is the page's
+           primary action and gets the blue palette. */
+        .se-file-ops {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 0 10px 0 6px;
+            margin-right: 6px;
+            border-right: 1px solid #e5e7eb;
+            height: 28px;
+            width: max-content;
+            flex-shrink: 0;
+            background: #fff;
         }
-        #sheetDirtyIndicator.visible { display: inline; }
-        #sheetStatus {
-            margin-left: auto; color: #64748b; font-size: 12px;
+        /* When the file-ops wrap is a direct grid-child of the ribbon row,
+           override the row's grid template so our wrap gets just its
+           content width and Univer's inner ribbon claims the remaining
+           1fr. Without this Univer assigns the inner div to min-content
+           (~32px → only the overflow ⋮ shows) and gives the rest to us. */
+        .se-ribbon-has-fileops {
+            grid-template-columns: max-content 1fr !important;
         }
+        .se-file-ops button {
+            padding: 3px 10px;
+            font-size: 12px;
+            border: 1px solid #cbd5e1;
+            border-radius: 4px;
+            background: transparent;
+            color: #1e293b;
+            cursor: pointer;
+            font-family: inherit;
+            line-height: 1.4;
+        }
+        .se-file-ops button:hover { background: #f1f5f9; }
+        .se-file-ops button[data-op="save"] {
+            background: #2563eb;
+            color: #fff;
+            border-color: #2563eb;
+        }
+        .se-file-ops button[data-op="save"]:hover { background: #1d4ed8; }
+        .se-file-ops #sheetDirtyIndicator {
+            display: none;
+            color: #dc2626;
+            font-size: 12px;
+            margin-left: 4px;
+        }
+        .se-file-ops #sheetDirtyIndicator.visible { display: inline; }
         #univerHost {
             flex: 1; min-height: 300px;
             position: relative;
@@ -658,6 +707,13 @@
         body.light .toolbar-controls .user-chip {
             background: #f8fafc; border-color: #e2e8f0; color: #334155;
         }
+        /* Fast-mode users (FAST_MODE_USERS in app.py) get a lightning-
+           bolt icon instead of the person silhouette. Tint it amber so
+           the chip reads as "fast" at a glance — text stays the chip's
+           normal color so the username remains the visual anchor. */
+        .toolbar-controls .user-chip.fast-user svg {
+            color: #fbbf24;
+        }
         .toolbar-controls #logoutBtn {
             width: auto; padding: 0 12px; font-size: 12px;
         }
@@ -734,6 +790,142 @@
             .content { padding: 12px 16px; }
             table { display: block; overflow-x: auto; }
         }
+
+        /* ---- Print styles -------------------------------------------------
+           Targets the table view + pivot view. Sheet view (Univer) is hidden
+           because its canvas-based rendering doesn't print cleanly — users
+           who want to print the spreadsheet should Save as XLSX and print
+           from Excel.
+           Approach: hide all chrome (sidebar, toolbar, view tabs, sheet
+           toolbar, progress, interactive filter icons), force light theme
+           so dark-mode users get readable output, and set up the table to
+           repeat its header on every page and avoid splitting rows. */
+        @media print {
+            /* Hide app chrome */
+            .sidebar,
+            .main > .toolbar,
+            #progressContainer,
+            #spreadsheetView,
+            .filter-dropdown {
+                display: none !important;
+            }
+            /* Force light palette even if user is on dark theme. The light
+               class is what swaps the page to white; we add it unconditionally
+               here and reset background/foreground so prints aren't washed
+               out or inverted. */
+            body, body.light {
+                background: #fff !important;
+                color: #000 !important;
+            }
+            .main {
+                margin: 0 !important;
+                padding: 0 !important;
+                width: 100% !important;
+            }
+            .content {
+                padding: 0 !important;
+                margin: 0 !important;
+            }
+            /* "Showing X of Y records" — small header line on the print */
+            #status {
+                font-size: 10pt;
+                color: #000 !important;
+                margin: 0 0 6pt 0;
+                padding: 0;
+            }
+            /* Table view */
+            #reportTable {
+                display: table !important;
+                width: 100% !important;
+                font-size: 8.5pt !important;
+                border-collapse: collapse !important;
+                page-break-inside: auto;
+            }
+            #reportTable thead {
+                display: table-header-group; /* repeat header on each page */
+            }
+            #reportTable tbody tr {
+                page-break-inside: avoid;
+                background: #fff !important;
+            }
+            #reportTable th,
+            #reportTable td {
+                border: 1px solid #888 !important;
+                padding: 3pt 5pt !important;
+                background: #fff !important;
+                color: #000 !important;
+                vertical-align: top;
+                /* Wrap long cells onto multiple lines instead of letting them
+                   overflow the page width. Particularly important for Thai
+                   names that can be 30+ characters. */
+                word-wrap: break-word;
+                overflow-wrap: break-word;
+                white-space: normal !important;
+            }
+            #reportTable th {
+                font-weight: 700;
+                background: #f3f4f6 !important;
+            }
+            /* Filter / sort icons are interactive-only — strip them out so
+               header cells aren't cluttered. */
+            #reportTable .filter-icon,
+            #reportTable .sort-icon,
+            #reportTable th button {
+                display: none !important;
+            }
+            /* Pivot view — PivotTable.js renders a configurator (drag-drop
+               field selectors + aggregator dropdown + chart-type tabs)
+               around the result table. We hide the configurator chrome and
+               keep just the rendered .pvtTable inside .pvtRendererArea.
+               pvtUi DOM shape (no <tbody> — PivotTable.js builds TRs as
+               direct children of <table>):
+                 <table.pvtUi>
+                   <tr> [td.pvtUiCell empty] [td.pvtVals.pvtUiCell aggregator] [td.pvtAxisContainer.pvtCols.pvtUiCell col-fields]
+                   <tr> [td.pvtAxisContainer.pvtUnused.pvtUiCell unused] [td.pvtAxisContainer.pvtRows.pvtUiCell row-fields] [td.pvtRendererArea result]
+               Hide everything with `pvtUiCell` (configurator), keep the
+               `pvtRendererArea` cell. */
+            #pivotView,
+            #pivotView .pvtUi,
+            #pivotView td.pvtRendererArea {
+                overflow: visible !important;
+                background: #fff !important;
+                width: 100% !important;
+            }
+            #pivotView .pivot-top-bar,
+            #pivotView .pvtUi td.pvtUiCell {
+                display: none !important;
+            }
+            #pivotView .pvtTable {
+                width: 100% !important;
+                font-size: 8.5pt !important;
+                border-collapse: collapse !important;
+                page-break-inside: auto;
+            }
+            /* Thai header text was rendering one character per line because
+               the column was collapsing too narrow. Keep wrap allowed for
+               long row labels (data cells), but force headers onto a single
+               line with auto width so column headers stay readable. */
+            #pivotView .pvtTable th {
+                white-space: nowrap !important;
+                font-weight: 700;
+                background: #f3f4f6 !important;
+            }
+            #pivotView .pvtTable th,
+            #pivotView .pvtTable td {
+                border: 1px solid #888 !important;
+                padding: 3pt 5pt !important;
+                background: #fff !important;
+                color: #000 !important;
+            }
+            #pivotView .pvtTable th { background: #f3f4f6 !important; }
+            /* Page setup: A4 landscape gives the widest cell area for our
+               5-column-default report. Users who need portrait can override
+               in the browser print dialog. */
+            @page {
+                size: A4 landscape;
+                margin: 1cm;
+            }
+        }
     </style>
 </head>
 <body>
@@ -802,14 +994,24 @@
                     </svg>
                 </button>
                 {% if username %}
-                <span class="user-chip" title="ผู้ใช้ปัจจุบัน">
+                <span class="user-chip{% if is_fast_user %} fast-user{% endif %}"
+                      title="{% if is_fast_user %}ผู้ใช้ Fast mode{% else %}ผู้ใช้ปัจจุบัน{% endif %}">
+                    {% if is_fast_user %}
+                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none"
+                         stroke="currentColor" stroke-width="2"
+                         stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M13 2L4 14h7l-1 8 9-12h-7l1-8z"/>
+                    </svg>
+                    {% else %}
                     <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
                         <circle cx="12" cy="7" r="4"/>
                     </svg>
+                    {% endif %}
                     {{ username }}
                 </span>
                 <form method="POST" action="/logout" style="display:inline;">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                     <button type="submit" id="logoutBtn" title="ออกจากระบบ">Logout</button>
                 </form>
                 {% endif %}
@@ -838,14 +1040,6 @@
             </div>
 
             <div id="spreadsheetView">
-                <div id="sheetToolbar">
-                    <button type="button" id="sheetNewBtn" class="sheet-btn" title="โหลดข้อมูลปัจจุบัน (จาก lastRecords) เข้า workbook ใหม่">New from data</button>
-                    <button type="button" id="sheetOpenBtn" class="sheet-btn" title="เปิดไฟล์ .univer.json ที่บันทึกไว้">Open</button>
-                    <button type="button" id="sheetSaveBtn" class="sheet-btn sheet-btn-primary" title="บันทึก workbook เป็นไฟล์ .univer.json (เก็บสูตรครบ)">Save</button>
-                    <button type="button" id="sheetSaveXlsxBtn" class="sheet-btn" title="บันทึกเป็น .xlsx (สูตรกลายเป็นค่า)">Save as XLSX</button>
-                    <span id="sheetDirtyIndicator" title="มีการแก้ไขที่ยังไม่ได้บันทึก">● unsaved</span>
-                    <span id="sheetStatus"></span>
-                </div>
                 <div id="univerHost">
                     <div id="sheetLoadingOverlay">
                         <div class="sheet-spinner"></div>
@@ -1923,10 +2117,24 @@
 
         // ========== EXPORT XLSX ==========
         const exportBtn = document.getElementById('exportBtn');
-        exportBtn.addEventListener('click', () => {
+        exportBtn.addEventListener('click', async () => {
             if (!lastRecords || lastRecords.length === 0) return;
             const selected = getSelectedColumns();
             if (selected.length === 0) return;
+            // SheetJS is lazy-loaded; first export pays a ~1.4 MB CDN
+            // fetch. Disable the button so a frantic double-click
+            // doesn't kick off two parallel builds.
+            const origLabel = exportBtn.textContent;
+            exportBtn.disabled = true;
+            try {
+                await loadSheetJsAssets();
+            } catch (e) {
+                console.error('SheetJS load failed:', e);
+                alert('โหลด SheetJS ไม่สำเร็จ — เช็คเน็ต/CDN');
+                exportBtn.disabled = false;
+                exportBtn.textContent = origLabel;
+                return;
+            }
             const filtered = getFilteredRecords();
             const textCols = new Set(['claim_no']);
 
@@ -1962,6 +2170,7 @@
             const df = document.getElementById('date_from').value;
             const dt = document.getElementById('date_to').value;
             XLSX.writeFile(wb, `SE_Report_${rt}_${df}_${dt}.xlsx`);
+            exportBtn.disabled = false;
         });
 
         // ========== SPREADSHEET VIEW (Univer) ==========
@@ -1993,6 +2202,14 @@
             drawingLocale:        `${UNIVER_BASE}/@univerjs/preset-sheets-drawing/lib/umd/locales/en-US.js`,
             hyperLink:            `${UNIVER_BASE}/@univerjs/preset-sheets-hyper-link/lib/umd/index.js`,
             hyperLinkLocale:      `${UNIVER_BASE}/@univerjs/preset-sheets-hyper-link/lib/umd/locales/en-US.js`,
+            note:                 `${UNIVER_BASE}/@univerjs/preset-sheets-note/lib/umd/index.js`,
+            noteLocale:           `${UNIVER_BASE}/@univerjs/preset-sheets-note/lib/umd/locales/en-US.js`,
+            table:                `${UNIVER_BASE}/@univerjs/preset-sheets-table/lib/umd/index.js`,
+            tableLocale:          `${UNIVER_BASE}/@univerjs/preset-sheets-table/lib/umd/locales/en-US.js`,
+            // Lower-level plugin (no preset bundle, no locale file) — adds
+            // Google-Sheets-style row+column highlight for the active cell.
+            // Registered manually via univer.registerPlugin() in mountUniver.
+            crosshair:            `${UNIVER_BASE}/@univerjs/sheets-crosshair-highlight/lib/umd/index.js`,
             // CSS for each preset (loaded in parallel as <link>)
             cssCore:      `${UNIVER_BASE}/@univerjs/preset-sheets-core/lib/index.css`,
             cssFilter:    `${UNIVER_BASE}/@univerjs/preset-sheets-filter/lib/index.css`,
@@ -2002,6 +2219,9 @@
             cssDataValidation: `${UNIVER_BASE}/@univerjs/preset-sheets-data-validation/lib/index.css`,
             cssDrawing:        `${UNIVER_BASE}/@univerjs/preset-sheets-drawing/lib/index.css`,
             cssHyperLink:      `${UNIVER_BASE}/@univerjs/preset-sheets-hyper-link/lib/index.css`,
+            cssNote:           `${UNIVER_BASE}/@univerjs/preset-sheets-note/lib/index.css`,
+            cssTable:          `${UNIVER_BASE}/@univerjs/preset-sheets-table/lib/index.css`,
+            cssCrosshair:      `${UNIVER_BASE}/@univerjs/sheets-crosshair-highlight/lib/index.css`,
         };
         const SHEET_TEXT_KEYS = new Set(['claim_no', 'notify_no', 'survey_no', 'preNotifyNo', 'policy_no', 'plate_no']);
         const SHEET_PERF_THRESHOLD = 50000;
@@ -2017,7 +2237,318 @@
             sourceLabel: '',
             recordCount: 0,
             colCount: 0,
+            crosshairOn: false,      // Crosshair highlight toggle state
         };
+
+        // Crosshair highlight is implemented by the @univerjs/sheets-
+        // crosshair-highlight plugin. It exposes a single toggle command
+        // that flips the highlight on/off; we mirror its state into a
+        // boolean and an .active class on the injected tab so the user
+        // knows what they're looking at without staring at the cell for
+        // half a second to see if the row glow appeared.
+        function setCrosshairButtonState() {
+            const injected = document.querySelector('.univer-crosshair-tab');
+            if (!injected) return;
+            injected.classList.toggle('active', sheetState.crosshairOn);
+            injected.textContent = 'โฟกัส';
+        }
+
+        async function toggleCrosshair() {
+            if (!sheetState.mounted || !sheetState.univerAPI) return;
+            try {
+                await sheetState.univerAPI.executeCommand('sheet.operation.toggle-crosshair-highlight');
+                sheetState.crosshairOn = !sheetState.crosshairOn;
+                setCrosshairButtonState();
+            } catch (e) {
+                console.error('toggle crosshair failed:', e);
+            }
+        }
+
+        // Sort the entire data region (rows 1..recordCount × cols 0..colCount-1)
+        // using the leftmost column of the user's current selection as the
+        // sort key. Univer's built-in sort-range-asc / -ext sorts only the
+        // selected range — and because our cellData is sparse (empty cells
+        // omitted, see workbook builder), the "-ext" auto-expansion fails to
+        // detect a contiguous data region and falls back to sorting just the
+        // one column, which leaves the other columns unmoved and breaks row
+        // integrity. Forcing a full-data sort here keeps rows coherent.
+        async function _runFullSheetSort(ascending) {
+            if (!sheetState.univerAPI) return;
+            const wb = sheetState.univerAPI.getActiveWorkbook();
+            if (!wb) return;
+            const sheet = wb.getActiveSheet();
+            if (!sheet) return;
+            const sel = sheet.getActiveRange();
+            let sortKey = 0;
+            if (sel) {
+                if (typeof sel.getColumn === 'function') sortKey = sel.getColumn() || 0;
+                else if (typeof sel.getRange === 'function') {
+                    const r = sel.getRange();
+                    if (r && typeof r.startColumn === 'number') sortKey = r.startColumn;
+                }
+            }
+            const dataRows = sheetState.recordCount || 0;
+            const dataCols = sheetState.colCount || 0;
+            if (dataRows < 1 || dataCols < 1) return;
+            const range = sheet.getRange(1, 0, dataRows, dataCols);
+            if (!range || typeof range.sort !== 'function') return;
+            range.sort([{ column: sortKey, ascending: !!ascending }]);
+        }
+
+        // Inject a Crosshair toggle button into Univer's tab bar as a
+        // sibling of Start/Insert/Formulas/Data. Univer renders the tab
+        // bar as a flex container with 4 role="tab" buttons; we attach
+        // our button at the end (next to Data). Idempotent — the
+        // MutationObserver re-injects if Univer wipes the tab bar (e.g.
+        // on workbook re-mount).
+        let _crosshairTabObserver = null;
+        function injectCrosshairTab() {
+            const mount = document.getElementById('univerMount');
+            if (!mount) return;
+            const anyTab = mount.querySelector('[role="tab"]');
+            if (!anyTab) return;
+            const tabBar = anyTab.parentElement;
+            if (!tabBar) return;
+            // Hide Data + Insert tabs — their tools are duplicated into the
+            // Start ribbon by patchStartRibbonWith{Data,Insert}Tools, so the
+            // separate tabs are redundant. Also relabel Start → "เมนู" and
+            // Formulas → "สูตร" so all visible tab labels are in Thai (the
+            // crosshair button below uses Thai-friendly "Highlight"). Re-run
+            // on every inject (initial + observer re-fires) in case Univer
+            // re-renders the tab bar.
+            const relabelTab = (tab, newLabel) => {
+                // Walk text nodes so we don't blow away Univer's nested
+                // span/icon wrappers; just rewrite the visible text.
+                const walker = document.createTreeWalker(tab, NodeFilter.SHOW_TEXT);
+                while (walker.nextNode()) {
+                    const node = walker.currentNode;
+                    if (node.nodeValue && node.nodeValue.trim()) {
+                        node.nodeValue = newLabel;
+                        return;
+                    }
+                }
+            };
+            for (const tab of tabBar.children) {
+                if (!tab.getAttribute || tab.getAttribute('role') !== 'tab') continue;
+                const label = tab.textContent.trim();
+                if (label === 'Data' || label === 'Insert') {
+                    tab.style.display = 'none';
+                } else if (label === 'Start') {
+                    relabelTab(tab, 'เมนู');
+                } else if (label === 'Formulas') {
+                    relabelTab(tab, 'สูตร');
+                }
+            }
+            if (tabBar.querySelector('.univer-crosshair-tab')) {
+                setCrosshairButtonState();
+                return;
+            }
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'univer-crosshair-tab';
+            btn.textContent = 'โฟกัส';
+            btn.title = 'เปิด/ปิดโฟกัส (Crosshair Highlight)';
+            btn.addEventListener('click', toggleCrosshair);
+            tabBar.appendChild(btn);
+            setCrosshairButtonState();
+            if (_crosshairTabObserver) {
+                try { _crosshairTabObserver.disconnect(); } catch {}
+            }
+            // Watch for two things:
+            //  1) Univer re-rendering the tab bar (wipes our crosshair button)
+            //     → re-inject the button
+            //  2) Univer overwriting the Thai labels back to "Start" / "Formulas"
+            //     when a different tab becomes active (React re-renders the
+            //     text node) → re-apply Thai labels in place. characterData
+            //     + subtree catches text-node mutations without us needing
+            //     to re-create the whole button.
+            _crosshairTabObserver = new MutationObserver(() => {
+                if (!tabBar.querySelector('.univer-crosshair-tab')) {
+                    setTimeout(injectCrosshairTab, 50);
+                    return;
+                }
+                for (const tab of tabBar.children) {
+                    if (!tab.getAttribute || tab.getAttribute('role') !== 'tab') continue;
+                    const t = tab.textContent.trim();
+                    if (t === 'Start') relabelTab(tab, 'เมนู');
+                    else if (t === 'Formulas') relabelTab(tab, 'สูตร');
+                    else if ((t === 'Data' || t === 'Insert') && tab.style.display !== 'none') {
+                        tab.style.display = 'none';
+                    }
+                }
+            });
+            _crosshairTabObserver.observe(tabBar, {
+                childList: true,
+                subtree: true,
+                characterData: true,
+            });
+        }
+
+        // Inject app-specific file-ops (Refresh Data / Open / Save / Save
+        // XLSX + dirty indicator) at the head of Univer's ribbon row, just
+        // before the Undo button. Univer's ribbon doesn't have a File menu
+        // and these are .se.json-specific operations that don't belong as
+        // Univer commands, so we hand-inject them.
+        // Idempotent + observed — re-injects if Univer wipes the row on
+        // tab switch / workbook re-mount.
+        let _fileOpsObserver = null;
+        function injectFileOpsIntoUniverRibbon() {
+            const mount = document.getElementById('univerMount');
+            if (!mount) return;
+            const tabHeader = Array.from(mount.querySelectorAll('header'))
+                .find(h => h.querySelector('[role="tab"]'));
+            if (!tabHeader) return;
+            // header has 3 children: tab bar (0), ribbon row (1), invisible (2)
+            const ribbonRow = tabHeader.children[1];
+            if (!ribbonRow) return;
+            // Insert as the first grid-child of the ribbon row + tag the
+            // row so our CSS override (grid-template-columns: max-content
+            // 1fr) kicks in. Putting the wrap inside the inner flex
+            // container doesn't work — the inner is sized wider than its
+            // grid cell and centered, pushing our buttons off-screen left.
+            if (ribbonRow.querySelector(':scope > .se-file-ops')) return;
+            ribbonRow.classList.add('se-ribbon-has-fileops');
+            const wrap = document.createElement('div');
+            wrap.className = 'se-file-ops';
+            // Hard-coded HTML for the 4 buttons + dirty indicator. Save uses
+            // the primary palette so it visually pops as the most common
+            // action after editing cells.
+            wrap.innerHTML =
+                '<button type="button" data-op="refresh" title="โหลดข้อมูลปัจจุบัน (จาก lastRecords) เข้า workbook">Refresh Data</button>' +
+                '<button type="button" data-op="open" title="เปิดไฟล์ .se / .se.json หรือ Excel">Open</button>' +
+                '<button type="button" data-op="save" title="บันทึก workbook เป็นไฟล์ .se.json (เก็บสูตรครบ)">Save</button>' +
+                '<button type="button" data-op="savexlsx" title="บันทึกเป็น .xlsx (สูตรกลายเป็นค่า)">Save XLSX</button>' +
+                '<span id="sheetDirtyIndicator" title="มีการแก้ไขที่ยังไม่ได้บันทึก">● unsaved</span>';
+            wrap.querySelector('[data-op="refresh"]').addEventListener('click', newFromData);
+            wrap.querySelector('[data-op="open"]').addEventListener('click', openSheetFile);
+            wrap.querySelector('[data-op="save"]').addEventListener('click', saveSheetJson);
+            wrap.querySelector('[data-op="savexlsx"]').addEventListener('click', saveSheetXlsx);
+            // Insert as the first grid column of the ribbon row.
+            ribbonRow.insertBefore(wrap, ribbonRow.firstChild);
+            // Sync the dirty indicator's visible class to current state
+            // (it gets re-created here so the class from a previous element
+            // doesn't carry over).
+            const ind = wrap.querySelector('#sheetDirtyIndicator');
+            if (ind) ind.classList.toggle('visible', !!sheetState.dirty);
+            if (_fileOpsObserver) {
+                try { _fileOpsObserver.disconnect(); } catch {}
+            }
+            _fileOpsObserver = new MutationObserver(() => {
+                if (!ribbonRow.querySelector(':scope > .se-file-ops')) {
+                    setTimeout(injectFileOpsIntoUniverRibbon, 50);
+                }
+            });
+            _fileOpsObserver.observe(ribbonRow, { childList: true });
+        }
+
+        // The menu-manager-service identifier is a Symbol so a plain
+        // inj.get('univer.menu-manager-service') throws — walk
+        // resolvedDependencies and match by Symbol description instead.
+        function findUniverMenuManager(injector, depth = 0) {
+            if (!injector || depth > 5) return null;
+            const dm = injector.resolvedDependencyCollection?.resolvedDependencies
+                || injector.resolvedDependencyCollection;
+            if (dm) {
+                const items = dm instanceof Map
+                    ? Array.from(dm.entries())
+                    : Object.entries(dm);
+                for (const [k, v] of items) {
+                    if (String(k) === 'univer.menu-manager-service'
+                        && Array.isArray(v) && v[0]?._menu) {
+                        return v[0];
+                    }
+                }
+            }
+            for (const c of injector.children || []) {
+                const found = findUniverMenuManager(c, depth + 1);
+                if (found) return found;
+            }
+            return null;
+        }
+
+        // Move the Data tab's ribbon items (filter / sort / find / table-
+        // selector / data-validation / conditional-formatting / text-to-
+        // number) into the Start tab's ribbon row so users don't have to
+        // switch tabs to reach them. Run once between createUniver and
+        // createWorkbook — `IMenuManagerService.mergeMenu()` updates the
+        // schema and emits menuChanged$ so the ribbon picks up the new
+        // items on its first render.
+        //
+        // Note: items are NOT moved out of the Data tab — they're
+        // *referenced* in both places (same menuItemFactory object). The
+        // Data tab still shows them; the Start ribbon shows them too.
+        function patchStartRibbonWithDataTools(univerInstance) {
+            try {
+                const inj = univerInstance?._injector;
+                if (!inj) return;
+                const mgr = findUniverMenuManager(inj);
+                if (!mgr) return;
+                const dataRibbon = mgr._menu?.ribbon?.['ribbon.data'];
+                if (!dataRibbon) return;
+                // Collect every leaf menu item from the Data tab's subgroups
+                // (rules / organization / others). Each subgroup is a node
+                // whose own children are the menu items keyed by their id.
+                const collected = {};
+                for (const groupKey of Object.keys(dataRibbon)) {
+                    if (groupKey === 'order') continue;
+                    const group = dataRibbon[groupKey];
+                    for (const itemKey of Object.keys(group)) {
+                        if (itemKey === 'order' || itemKey === 'menuItemFactory') continue;
+                        collected[itemKey] = group[itemKey];
+                    }
+                }
+                mgr.mergeMenu({ 'ribbon.start.others': collected });
+            } catch (e) {
+                console.warn('patchStartRibbonWithDataTools failed:', e);
+            }
+        }
+
+        // Move Insert tab's image + hyperlink into the Start ribbon's
+        // "history" group so they sit right after the undo / redo / format-
+        // painter / clear cluster, before the font dropdown — a stable
+        // visible position that doesn't compete for space with the densely-
+        // packed format / layout / others groups (where high-order items
+        // overflow into Univer's "More" menu and disappear).
+        //
+        // Skips the zen-editor hyperlink variant (only used in zen mode) and
+        // doc.menu.table (Docs-specific, not a sheet feature). Shallow-copy
+        // each item with an overridden `order` so the two icons land
+        // adjacent at the end of the history group without mutating the
+        // shared object that Univer's Insert tab still uses.
+        function patchStartRibbonWithInsertTools(univerInstance) {
+            try {
+                const inj = univerInstance?._injector;
+                if (!inj) return;
+                const mgr = findUniverMenuManager(inj);
+                if (!mgr) return;
+                const insertRibbon = mgr._menu?.ribbon?.['ribbon.insert'];
+                if (!insertRibbon) return;
+                // Order matters in the output: image first, hyperlink second
+                const wantedOrder = [
+                    'sheet.menu.image',
+                    'sheet.operation.insert-hyper-link-toolbar',
+                ];
+                const originalItems = {};
+                for (const groupKey of Object.keys(insertRibbon)) {
+                    if (groupKey === 'order') continue;
+                    const group = insertRibbon[groupKey];
+                    for (const itemKey of Object.keys(group)) {
+                        if (itemKey === 'order' || itemKey === 'menuItemFactory') continue;
+                        originalItems[itemKey] = group[itemKey];
+                    }
+                }
+                const collected = {};
+                wantedOrder.forEach((id, idx) => {
+                    const src = originalItems[id];
+                    if (!src) return;
+                    collected[id] = Object.assign({}, src, { order: 100 + idx });
+                });
+                if (Object.keys(collected).length === 0) return;
+                mgr.mergeMenu({ 'ribbon.start.history': collected });
+            } catch (e) {
+                console.warn('patchStartRibbonWithInsertTools failed:', e);
+            }
+        }
 
         function setSheetDirty(flag) {
             sheetState.dirty = flag;
@@ -2071,6 +2602,51 @@
             link.rel = 'stylesheet';
             link.href = src;
             document.head.appendChild(link);
+        }
+
+        // ===== SheetJS lazy-loader =====
+        // Used by Export Excel (table view), Save as XLSX (sheet view),
+        // and Open .xlsx in the sheet view. ~1.4 MB minified — too big
+        // to ship on every page load when most users never export.
+        const SHEETJS_URL = 'https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js';
+        const sheetJsState = { loaded: false, loadingPromise: null };
+
+        function loadSheetJsAssets() {
+            if (sheetJsState.loaded) return Promise.resolve();
+            if (sheetJsState.loadingPromise) return sheetJsState.loadingPromise;
+            sheetJsState.loadingPromise = _loadUniverScript(SHEETJS_URL).then(() => {
+                if (typeof XLSX === 'undefined') {
+                    throw new Error('SheetJS global (XLSX) missing after script load');
+                }
+                sheetJsState.loaded = true;
+            });
+            return sheetJsState.loadingPromise.catch(err => {
+                sheetJsState.loadingPromise = null;
+                throw err;
+            });
+        }
+
+        // ===== JSZip lazy-loader =====
+        // Used by Open .xlsx to extract Excel Tables (xl/tables/*.xml) that
+        // SheetJS Community Edition doesn't expose through its parsed
+        // workbook object. ~100 KB minified — only fetched on first .xlsx
+        // open, not on every page load.
+        const JSZIP_URL = 'https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js';
+        const jszipState = { loaded: false, loadingPromise: null };
+
+        function loadJSZipAssets() {
+            if (jszipState.loaded) return Promise.resolve();
+            if (jszipState.loadingPromise) return jszipState.loadingPromise;
+            jszipState.loadingPromise = _loadUniverScript(JSZIP_URL).then(() => {
+                if (typeof JSZip === 'undefined') {
+                    throw new Error('JSZip global missing after script load');
+                }
+                jszipState.loaded = true;
+            });
+            return jszipState.loadingPromise.catch(err => {
+                jszipState.loadingPromise = null;
+                throw err;
+            });
         }
 
         // ===== Pivot stack lazy-loader =====
@@ -2128,7 +2704,9 @@
                 [UNIVER_URLS.cssCore, UNIVER_URLS.cssFilter, UNIVER_URLS.cssSort,
                  UNIVER_URLS.cssFindReplace, UNIVER_URLS.cssCf,
                  UNIVER_URLS.cssDataValidation, UNIVER_URLS.cssDrawing,
-                 UNIVER_URLS.cssHyperLink].forEach(_loadUniverCss);
+                 UNIVER_URLS.cssHyperLink,
+                 UNIVER_URLS.cssNote, UNIVER_URLS.cssTable,
+                 UNIVER_URLS.cssCrosshair].forEach(_loadUniverCss);
 
                 // Base deps must load before Univer UMDs (sequential to be safe)
                 await _loadUniverScript(UNIVER_URLS.react);
@@ -2141,7 +2719,10 @@
                 await _loadUniverScript(UNIVER_URLS.core);
                 await _loadUniverScript(UNIVER_URLS.coreLocale);
                 // Optional feature presets — load best-effort; if any fail to
-                // load we still proceed with whatever's available.
+                // load we still proceed with whatever's available. The 2nd
+                // tuple entry is the locale URL; `null` means the package
+                // has no locale file (true for the crosshair-highlight
+                // plugin — its labels come from base sheets-ui).
                 const optional = [
                     [UNIVER_URLS.filter,         UNIVER_URLS.filterLocale],
                     [UNIVER_URLS.sort,           UNIVER_URLS.sortLocale],
@@ -2150,11 +2731,14 @@
                     [UNIVER_URLS.dataValidation, UNIVER_URLS.dataValidationLocale],
                     [UNIVER_URLS.drawing,        UNIVER_URLS.drawingLocale],
                     [UNIVER_URLS.hyperLink,      UNIVER_URLS.hyperLinkLocale],
+                    [UNIVER_URLS.note,           UNIVER_URLS.noteLocale],
+                    [UNIVER_URLS.table,          UNIVER_URLS.tableLocale],
+                    [UNIVER_URLS.crosshair,      null],
                 ];
                 for (const [js, loc] of optional) {
                     try {
                         await _loadUniverScript(js);
-                        await _loadUniverScript(loc);
+                        if (loc) await _loadUniverScript(loc);
                     } catch (e) {
                         console.warn('Optional Univer preset failed to load:', js, e);
                     }
@@ -2337,6 +2921,8 @@
                 ['UniverPresetSheetsDataValidation',       'UniverSheetsDataValidationPreset',       'UniverPresetSheetsDataValidationEnUS'],
                 ['UniverPresetSheetsDrawing',              'UniverSheetsDrawingPreset',              'UniverPresetSheetsDrawingEnUS'],
                 ['UniverPresetSheetsHyperLink',            'UniverSheetsHyperLinkPreset',            'UniverPresetSheetsHyperLinkEnUS'],
+                ['UniverPresetSheetsNote',                 'UniverSheetsNotePreset',                 'UniverPresetSheetsNoteEnUS'],
+                ['UniverPresetSheetsTable',                'UniverSheetsTablePreset',                'UniverPresetSheetsTableEnUS'],
             ];
             for (const [ns, preset, locale] of opt) {
                 const nsObj = window[ns];
@@ -2354,15 +2940,54 @@
                 presets,
             });
 
+            // crosshair-highlight is a lower-level plugin (no preset bundle).
+            // Register it AFTER createUniver but BEFORE createWorkbook so the
+            // plugin gets initialised against the same DI container that the
+            // workbook will hook into. Wrapped in try/catch since the script
+            // load is best-effort (no-op if the optional CDN fetch failed).
+            try {
+                const chNs = window.UniverSheetsCrosshairHighlight;
+                if (chNs && chNs.UniverSheetsCrosshairHighlightPlugin) {
+                    univer.registerPlugin(chNs.UniverSheetsCrosshairHighlightPlugin);
+                }
+            } catch (e) {
+                console.warn('crosshair-highlight registration failed:', e);
+            }
+
             univerAPI.createWorkbook(workbookData);
+
+            // Copy Data tab's ribbon items into the Start tab's ribbon so
+            // users get filter / sort / find / table / dv / cf / text-to-
+            // number without having to switch tabs. Items get registered
+            // by their plugins AFTER createWorkbook — and some preset
+            // bundles (filter / sort / find-replace / data-validation)
+            // register asynchronously, so a small delay lets the schema
+            // settle before we copy from it. mergeMenu emits menuChanged$
+            // which the ribbon subscribes to and re-renders with our
+            // additions, so timing-after-render is fine.
+            setTimeout(() => {
+                patchStartRibbonWithDataTools(univer);
+                patchStartRibbonWithInsertTools(univer);
+            }, 500);
 
             sheetState.univer = univer;
             sheetState.univerAPI = univerAPI;
             sheetState.currentData = workbookData;
             sheetState.sourceLabel = label || '';
             sheetState.mounted = true;
+            // Crosshair plugin starts off after a fresh mount — toggle state
+            // doesn't carry over because we create a brand-new Univer instance.
+            sheetState.crosshairOn = false;
             setSheetDirty(false);
             setSheetStatus(label || '');
+            // Inject the Crosshair toggle into Univer's tab bar (next to
+            // Data) + the file-ops button group at the head of the ribbon
+            // row. Univer renders the tab bar / ribbon asynchronously after
+            // createWorkbook so wait a tick for the DOM to settle.
+            setTimeout(() => {
+                injectCrosshairTab();
+                injectFileOpsIntoUniverRibbon();
+            }, 150);
 
             // Attach a dirty-tracking listener. Univer's command system fires
             // for every mutation (type === 2 in the CommandType enum). We
@@ -2381,6 +3006,36 @@
                 }
             } catch (e) {
                 console.warn('Failed to attach Univer change listener:', e);
+            }
+
+            // Intercept Sort Ascending / Descending so we sort the whole data
+            // region (rows 1..N × all cols) keyed off the user's selected
+            // column, instead of letting Univer sort only the selected range
+            // (which leaves the other columns frozen and breaks row order).
+            // Throwing from the pre-hook cancels the original command in
+            // Univer 0.22.x; if a future version changes that, the fallback
+            // sort still runs and overwrites whatever the original did.
+            try {
+                if (typeof univerAPI.onBeforeCommandExecute === 'function') {
+                    univerAPI.onBeforeCommandExecute((cmd) => {
+                        if (!cmd || !cmd.id) return;
+                        if (sheetState._sortGuard) return; // ignore mutations our own sort dispatches
+                        const id = cmd.id;
+                        const asc = (id === 'sheet.command.sort-range-asc'
+                            || id === 'sheet.command.sort-range-asc-ext');
+                        const desc = (id === 'sheet.command.sort-range-desc'
+                            || id === 'sheet.command.sort-range-desc-ext');
+                        if (!asc && !desc) return;
+                        sheetState._sortGuard = true;
+                        Promise.resolve()
+                            .then(() => _runFullSheetSort(asc))
+                            .catch(e => console.error('Full-data sort failed:', e))
+                            .finally(() => { sheetState._sortGuard = false; });
+                        throw new Error('SE_SORT_INTERCEPTED'); // cancel Univer's partial sort
+                    });
+                }
+            } catch (e) {
+                console.warn('Failed to attach sort interceptor:', e);
             }
         }
 
@@ -2529,7 +3184,13 @@
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.href = url;
-                a.download = `SE_Report_workbook_${tsForFilename()}.univer.json`;
+                // Double extension on purpose. Windows hides the trailing
+                // ".json" (default "hide known extensions" setting) so users
+                // see "SE_Report_workbook_…se" with file type "JSON Source
+                // File"; on macOS/Linux they see the full ".se.json". Either
+                // way, editors/parsers treat it as JSON because of the .json
+                // suffix — branded name + zero loss in tooling support.
+                a.download = `SE_Report_workbook_${tsForFilename()}.se.json`;
                 document.body.appendChild(a);
                 a.click();
                 document.body.removeChild(a);
@@ -2542,11 +3203,441 @@
             }
         }
 
-        function openSheetJson() {
+        // Parse Excel Tables out of a .xlsx by unzipping its XML parts.
+        // SheetJS Community Edition doesn't surface table metadata on its
+        // parsed workbook, so we go to the raw zip:
+        //   xl/worksheets/_rels/sheet{N}.xml.rels → maps sheet index → table xml file
+        //   xl/tables/table{N}.xml               → table definition (range, name, columns)
+        // Returns [{sheetIdx, name, range:{s,e}, columns:[{displayName}]}, ...]
+        async function extractExcelTablesFromXlsx(arrayBuffer, sheetCount) {
+            await loadJSZipAssets();
+            const zip = await JSZip.loadAsync(arrayBuffer);
+            const parser = new DOMParser();
+            const results = [];
+            // Sheet files are 1-indexed (sheet1.xml, sheet2.xml, ...) and
+            // line up with wb.SheetNames order in the typical case (Excel
+            // writes them in order). Robust mapping would parse workbook.xml
+            // + workbook.xml.rels but for the user's primary use case (one
+            // sheet with tables) this is sufficient.
+            for (let i = 0; i < sheetCount; i++) {
+                const relPath = `xl/worksheets/_rels/sheet${i + 1}.xml.rels`;
+                const relFile = zip.files[relPath];
+                if (!relFile) continue;
+                const relXml = await relFile.async('text');
+                const relDoc = parser.parseFromString(relXml, 'text/xml');
+                const rels = Array.from(relDoc.getElementsByTagName('Relationship'));
+                for (const rel of rels) {
+                    const target = rel.getAttribute('Target') || '';
+                    if (!/tables\/table\d+\.xml$/i.test(target)) continue;
+                    // Target is typically "../tables/table1.xml"; resolve to
+                    // an absolute path inside the zip.
+                    const tablePath = target.startsWith('../')
+                        ? 'xl/' + target.slice(3)
+                        : (target.startsWith('xl/') ? target : 'xl/' + target);
+                    const tableFile = zip.files[tablePath];
+                    if (!tableFile) continue;
+                    const tableXml = await tableFile.async('text');
+                    const tableDoc = parser.parseFromString(tableXml, 'text/xml');
+                    const tEl = tableDoc.documentElement;
+                    if (!tEl) continue;
+                    const name = tEl.getAttribute('displayName')
+                        || tEl.getAttribute('name')
+                        || 'Table';
+                    const ref = tEl.getAttribute('ref');
+                    if (!ref) continue;
+                    const range = XLSX.utils.decode_range(ref);
+                    const colEls = Array.from(tableDoc.getElementsByTagName('tableColumn'));
+                    const columns = colEls.map(el => ({
+                        displayName: el.getAttribute('name') || 'Column',
+                    }));
+                    results.push({ sheetIdx: i, name, range, columns });
+                }
+            }
+            return results;
+        }
+
+        // Random short id for Univer's table / column ids — same shape
+        // (~10 chars) as the runtime addTable produces.
+        function _shortId(prefix) {
+            return (prefix || '') + Math.random().toString(36).slice(2, 11);
+        }
+
+        // Excel border style names (xl/styles.xml) → Univer BorderStyleTypes
+        // numeric values. Univer's enum (from sheets-ui source):
+        //   1=THIN, 2=HAIR, 3=DOTTED, 4=DASHED, 5=DOUBLE, 6=MEDIUM,
+        //   7=MEDIUM_DASHED, 8=MEDIUM_DASH_DOT, 9=MEDIUM_DASH_DOT_DOT,
+        //   10=SLANT_DASH_DOT, 11=THICK
+        // Unknown styles fall back to THIN.
+        const _EXCEL_BORDER_STYLE_TO_UNIVER = {
+            thin: 1, hair: 2, dotted: 3, dashed: 4, double: 5, medium: 6,
+            mediumDashed: 7, mediumDashDot: 8, mediumDashDotDot: 9,
+            slantDashDot: 10, thick: 11,
+            dashDot: 4, dashDotDot: 4,
+        };
+
+        // Excel uses 8-char ARGB ("FF000000") — Univer wants 6-char hex
+        // ("#000000"). Drops the alpha channel.
+        function _argbToHex(argb) {
+            if (!argb) return '#000000';
+            let s = String(argb).replace(/^#/, '');
+            if (s.length === 8) s = s.slice(2);
+            if (s.length !== 6) return '#000000';
+            return '#' + s.toUpperCase();
+        }
+
+        // Parse one border edge element (<left>/<right>/<top>/<bottom>).
+        // Returns null if the edge is missing or style="none". Theme/indexed
+        // colours collapse to default black — full theme/indexed parsing is
+        // out of scope (would need theme1.xml + the indexed-color table).
+        function _parseBorderEdge(el) {
+            if (!el) return null;
+            const style = el.getAttribute('style');
+            if (!style || style === 'none') return null;
+            const colorEl = el.getElementsByTagName('color')[0];
+            let rgb = null;
+            if (colorEl) {
+                rgb = colorEl.getAttribute('rgb');
+                if (!rgb) rgb = 'FF000000';
+            }
+            return { style, rgb: rgb || 'FF000000' };
+        }
+
+        // Extract cell-level styles (borders, fills, fonts) from a .xlsx zip.
+        // SheetJS Community Edition strips the `s` attribute off cells during
+        // parse, so we re-parse xl/worksheets/sheet{N}.xml ourselves to get
+        // each cell's style index, then resolve it against xl/styles.xml.
+        // Returns an array indexed by sheet position; each entry is a
+        // { "A1": <univer style obj>, ... } map.
+        async function extractExcelCellStylesFromXlsx(arrayBuffer, sheetCount) {
+            await loadJSZipAssets();
+            const zip = await JSZip.loadAsync(arrayBuffer);
+            const parser = new DOMParser();
+            const stylesFile = zip.files['xl/styles.xml'];
+            if (!stylesFile) return [];
+            const stylesDoc = parser.parseFromString(
+                await stylesFile.async('text'), 'text/xml');
+
+            // borders[i] = { l, r, t, b } edges (each: { style, rgb } | null)
+            const bordersEl = stylesDoc.getElementsByTagName('borders')[0];
+            const borderDefs = [];
+            if (bordersEl) {
+                for (const bEl of Array.from(bordersEl.children)) {
+                    borderDefs.push({
+                        l: _parseBorderEdge(bEl.getElementsByTagName('left')[0]),
+                        r: _parseBorderEdge(bEl.getElementsByTagName('right')[0]),
+                        t: _parseBorderEdge(bEl.getElementsByTagName('top')[0]),
+                        b: _parseBorderEdge(bEl.getElementsByTagName('bottom')[0]),
+                    });
+                }
+            }
+
+            // fills[i] = { rgb } | null. Skip "none" and the gray125 placeholder
+            // (Excel always writes gray125 as fill index 1 — never a real fill).
+            const fillsEl = stylesDoc.getElementsByTagName('fills')[0];
+            const fillDefs = [];
+            if (fillsEl) {
+                for (const fEl of Array.from(fillsEl.children)) {
+                    const pat = fEl.getElementsByTagName('patternFill')[0];
+                    if (!pat) { fillDefs.push(null); continue; }
+                    const ptype = pat.getAttribute('patternType');
+                    if (!ptype || ptype === 'none' || ptype === 'gray125') {
+                        fillDefs.push(null); continue;
+                    }
+                    const fg = pat.getElementsByTagName('fgColor')[0];
+                    const rgb = fg ? fg.getAttribute('rgb') : null;
+                    fillDefs.push(rgb ? { rgb } : null);
+                }
+            }
+
+            // fonts[i] = { bold, italic, ul, strike, rgb, size, family }
+            const fontsEl = stylesDoc.getElementsByTagName('fonts')[0];
+            const fontDefs = [];
+            if (fontsEl) {
+                for (const fEl of Array.from(fontsEl.children)) {
+                    const colorEl = fEl.getElementsByTagName('color')[0];
+                    const szEl = fEl.getElementsByTagName('sz')[0];
+                    const nameEl = fEl.getElementsByTagName('name')[0];
+                    fontDefs.push({
+                        bold: fEl.getElementsByTagName('b').length > 0,
+                        italic: fEl.getElementsByTagName('i').length > 0,
+                        ul: fEl.getElementsByTagName('u').length > 0,
+                        strike: fEl.getElementsByTagName('strike').length > 0,
+                        rgb: colorEl ? colorEl.getAttribute('rgb') : null,
+                        size: szEl ? parseFloat(szEl.getAttribute('val')) : null,
+                        family: nameEl ? nameEl.getAttribute('val') : null,
+                    });
+                }
+            }
+
+            // cellXfs[i] = { borderId, fillId, fontId } — the style records
+            // that cells reference via their `s` attribute.
+            const cellXfsEl = stylesDoc.getElementsByTagName('cellXfs')[0];
+            const cellXfs = [];
+            if (cellXfsEl) {
+                for (const xfEl of Array.from(cellXfsEl.children)) {
+                    cellXfs.push({
+                        borderId: parseInt(xfEl.getAttribute('borderId') || '0'),
+                        fillId: parseInt(xfEl.getAttribute('fillId') || '0'),
+                        fontId: parseInt(xfEl.getAttribute('fontId') || '0'),
+                    });
+                }
+            }
+
+            // Convert one xf record + the style tables → Univer cell style obj
+            const xfToStyle = (xf) => {
+                const us = {};
+                const bd = borderDefs[xf.borderId];
+                if (bd) {
+                    const edges = {};
+                    const makeEdge = (edge) => ({
+                        s: _EXCEL_BORDER_STYLE_TO_UNIVER[edge.style] || 1,
+                        cl: { rgb: _argbToHex(edge.rgb) },
+                    });
+                    if (bd.t) edges.t = makeEdge(bd.t);
+                    if (bd.b) edges.b = makeEdge(bd.b);
+                    if (bd.l) edges.l = makeEdge(bd.l);
+                    if (bd.r) edges.r = makeEdge(bd.r);
+                    if (Object.keys(edges).length) us.bd = edges;
+                }
+                const fill = fillDefs[xf.fillId];
+                if (fill && fill.rgb) us.bg = { rgb: _argbToHex(fill.rgb) };
+                const font = fontDefs[xf.fontId];
+                if (font) {
+                    if (font.bold) us.bl = 1;
+                    if (font.italic) us.it = 1;
+                    if (font.ul) us.ul = { s: 1 };
+                    if (font.strike) us.st = { s: 1 };
+                    if (font.rgb) us.cl = { rgb: _argbToHex(font.rgb) };
+                    if (font.size && font.size !== 11) us.fs = font.size;
+                    if (font.family && font.family !== 'Calibri') us.ff = font.family;
+                }
+                return Object.keys(us).length ? us : null;
+            };
+
+            // Walk each sheet's XML and pull out (cellAddr → styleObj)
+            const stylesPerSheet = [];
+            for (let i = 0; i < sheetCount; i++) {
+                const sheetFile = zip.files[`xl/worksheets/sheet${i + 1}.xml`];
+                if (!sheetFile) { stylesPerSheet.push({}); continue; }
+                const sheetDoc = parser.parseFromString(
+                    await sheetFile.async('text'), 'text/xml');
+                const cellEls = Array.from(sheetDoc.getElementsByTagName('c'));
+                const styles = {};
+                for (const cEl of cellEls) {
+                    const addr = cEl.getAttribute('r');
+                    const sIdx = cEl.getAttribute('s');
+                    if (!addr || sIdx === null) continue;
+                    const xf = cellXfs[parseInt(sIdx)];
+                    if (!xf) continue;
+                    const us = xfToStyle(xf);
+                    if (us) styles[addr] = us;
+                }
+                stylesPerSheet.push(styles);
+            }
+            return stylesPerSheet;
+        }
+
+        // Convert a SheetJS workbook (XLSX.read result) into the same
+        // IWorkbookData shape Univer expects. Preserves cell values + types
+        // + formulas + merged cells; SheetJS community edition strips cell
+        // styles so colour/font/borders won't carry over (acceptable trade
+        // for a free reader — users can re-style after import).
+        //
+        // Also extracts Excel Tables (xl/tables/*.xml) from the raw zip
+        // when `arrayBuffer` is passed, and injects them as a
+        // SHEET_TABLE_PLUGIN resource so Univer's table preset renders them
+        // on mount. Style/colour of Excel tables collapses to the default
+        // table-default-0 style (one-size-fits-all is fine; users get
+        // layout + filters back, which is the visible bit they're after).
+        async function xlsxWorkbookToUniver(wb, fileName, arrayBuffer) {
+            const sheetOrder = [];
+            const sheets = {};
+            const ts = Date.now();
+
+            wb.SheetNames.forEach((name, idx) => {
+                const ws = wb.Sheets[name];
+                if (!ws || !ws['!ref']) return;
+                const range = XLSX.utils.decode_range(ws['!ref']);
+                const cellData = {};
+                let maxR = -1, maxC = -1;
+
+                for (let r = range.s.r; r <= range.e.r; r++) {
+                    for (let c = range.s.c; c <= range.e.c; c++) {
+                        const addr = XLSX.utils.encode_cell({ r, c });
+                        const cell = ws[addr];
+                        if (!cell) continue;
+                        const v = cell.v;
+                        if (v === null || v === undefined || v === '') continue;
+                        if (!cellData[r]) cellData[r] = {};
+                        const isNum = typeof v === 'number' && Number.isFinite(v);
+                        const cellObj = {
+                            v: isNum ? v : String(v),
+                            t: isNum ? UNIVER_T_NUMBER : UNIVER_T_STRING,
+                        };
+                        // Preserve formulas. SheetJS strips the leading '=';
+                        // Univer's formula engine wants it included.
+                        if (cell.f) {
+                            cellObj.f = cell.f.startsWith('=') ? cell.f : '=' + cell.f;
+                        }
+                        cellData[r][c] = cellObj;
+                        if (r > maxR) maxR = r;
+                        if (c > maxC) maxC = c;
+                    }
+                }
+
+                if (maxR < 0) return;  // sheet had !ref but no actual values
+
+                const sheetId = `sheet-${idx}-${ts}`;
+                sheetOrder.push(sheetId);
+                sheets[sheetId] = {
+                    id: sheetId,
+                    name,
+                    rowCount: Math.max(maxR + 50, 200),
+                    columnCount: Math.max(maxC + 5, 26),
+                    cellData,
+                    // Translate SheetJS merge ranges {s:{r,c},e:{r,c}} →
+                    // Univer's {startRow, endRow, startColumn, endColumn}.
+                    mergeData: (ws['!merges'] || []).map(m => ({
+                        startRow: m.s.r,
+                        endRow: m.e.r,
+                        startColumn: m.s.c,
+                        endColumn: m.e.c,
+                    })),
+                    defaultColumnWidth: 110,
+                    defaultRowHeight: 24,
+                };
+            });
+
+            if (sheetOrder.length === 0) {
+                throw new Error('ไม่พบชีตที่มีข้อมูลในไฟล์');
+            }
+
+            // Extract cell-level styles (borders, fills, fonts) and merge them
+            // into the sparse cellData. SheetJS CE strips cell `.s` indices on
+            // parse so empty-but-styled cells (e.g. a bordered template region)
+            // are entirely absent — we walk xl/worksheets/sheet*.xml ourselves
+            // and seed those cells here so the borders render.
+            if (arrayBuffer) {
+                try {
+                    const stylesPerSheet = await extractExcelCellStylesFromXlsx(
+                        arrayBuffer, wb.SheetNames.length);
+                    sheetOrder.forEach((sid, sheetIdx) => {
+                        const cellStyles = stylesPerSheet[sheetIdx];
+                        if (!cellStyles) return;
+                        const cellData = sheets[sid].cellData;
+                        let maxR = -1, maxC = -1;
+                        for (const addr of Object.keys(cellStyles)) {
+                            const { r, c } = XLSX.utils.decode_cell(addr);
+                            if (!cellData[r]) cellData[r] = {};
+                            if (!cellData[r][c]) {
+                                cellData[r][c] = { v: '', t: UNIVER_T_STRING };
+                            }
+                            cellData[r][c].s = Object.assign(
+                                {}, cellData[r][c].s || {}, cellStyles[addr]);
+                            if (r > maxR) maxR = r;
+                            if (c > maxC) maxC = c;
+                        }
+                        // Grow rowCount/columnCount so the styled cells are
+                        // inside the visible sheet bounds (otherwise borders
+                        // past the prior maxR/maxC would be clipped).
+                        const sheet = sheets[sid];
+                        sheet.rowCount = Math.max(sheet.rowCount, maxR + 50);
+                        sheet.columnCount = Math.max(sheet.columnCount, maxC + 5);
+                    });
+                } catch (e) {
+                    console.warn('extractExcelCellStylesFromXlsx failed:', e);
+                }
+            }
+
+            // Extract Excel Tables from the raw zip and convert to a
+            // SHEET_TABLE_PLUGIN resource so Univer's table preset picks
+            // them up on createWorkbook. Best-effort: any parse failure is
+            // logged and the import continues without tables (preferable to
+            // failing the whole open).
+            const resources = [];
+            if (arrayBuffer) {
+                try {
+                    const excelTables = await extractExcelTablesFromXlsx(arrayBuffer, wb.SheetNames.length);
+                    if (excelTables.length > 0) {
+                        const bySheet = {};
+                        for (const t of excelTables) {
+                            const sid = sheetOrder[t.sheetIdx];
+                            if (!sid) continue;
+                            if (!bySheet[sid]) bySheet[sid] = [];
+                            bySheet[sid].push({
+                                id: _shortId('t-'),
+                                name: t.name,
+                                range: {
+                                    startRow: t.range.s.r,
+                                    startColumn: t.range.s.c,
+                                    endRow: t.range.e.r,
+                                    endColumn: t.range.e.c,
+                                },
+                                options: {
+                                    showHeader: true,
+                                    showFooter: false,
+                                    tableStyleId: 'table-default-0',
+                                },
+                                filters: { tableColumnFilterList: [] },
+                                columns: t.columns.map(c => ({
+                                    id: _shortId('c-'),
+                                    displayName: c.displayName,
+                                    dataType: 'string',
+                                    formula: '',
+                                    meta: {},
+                                    style: {},
+                                })),
+                            });
+                        }
+                        const pluginData = {};
+                        for (const sid of Object.keys(bySheet)) {
+                            pluginData[sid] = {
+                                tables: bySheet[sid],
+                                tableFilteredOutRows: [],
+                            };
+                        }
+                        resources.push({
+                            name: 'SHEET_TABLE_PLUGIN',
+                            data: JSON.stringify(pluginData),
+                        });
+                    }
+                } catch (e) {
+                    console.warn('extractExcelTablesFromXlsx failed:', e);
+                }
+            }
+
+            return {
+                id: 'wb-' + ts,
+                name: fileName || 'Imported Workbook',
+                appVersion: '0.10.0',
+                locale: 'enUS',
+                sheetOrder,
+                sheets,
+                styles: {},
+                resources,
+            };
+        }
+
+        function openSheetFile() {
             if (sheetState.dirty && !confirm('มีการแก้ไขที่ยังไม่ได้บันทึก — เปิดไฟล์ใหม่จะทับของเดิม\n\nต้องการต่อ?')) return;
             const input = document.createElement('input');
             input.type = 'file';
-            input.accept = '.json,application/json';
+            // Accept both Univer's native format and Excel files. The
+            // long MIME types are needed because Chrome on some setups
+            // hides files when the extension list alone doesn't match the
+            // OS-reported MIME (the symptom that prompted this change).
+            // New brand: .se / .se.json. Keep .univer.json so files saved
+            // before the rename still open. Plain .json stays too — useful
+            // for ad-hoc edits in an editor and for the few users who type
+            // their own filename.
+            input.accept = [
+                '.se', '.se.json',
+                '.univer.json', '.json',
+                '.xlsx', '.xls',
+                'application/json',
+                'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                'application/vnd.ms-excel',
+            ].join(',');
             input.style.display = 'none';
             input.addEventListener('change', async () => {
                 const file = input.files && input.files[0];
@@ -2555,10 +3646,22 @@
                 try {
                     setSheetOverlay(true, `กำลังอ่านไฟล์ ${file.name}...`);
                     await loadUniverAssets();
-                    const text = await file.text();
-                    const data = JSON.parse(text);
-                    if (!data || typeof data !== 'object' || !data.sheets) {
-                        throw new Error('รูปแบบไฟล์ไม่ถูกต้อง — คาดว่าเป็น Univer workbook JSON (.univer.json)');
+
+                    const isExcel = /\.(xlsx|xls)$/i.test(file.name);
+                    let data;
+                    if (isExcel) {
+                        setSheetOverlay(true, `กำลังโหลด SheetJS...`);
+                        await loadSheetJsAssets();
+                        setSheetOverlay(true, `กำลังอ่าน ${file.name}...`);
+                        const buf = await file.arrayBuffer();
+                        const wb = XLSX.read(buf, { type: 'array' });
+                        data = await xlsxWorkbookToUniver(wb, file.name, buf);
+                    } else {
+                        const text = await file.text();
+                        data = JSON.parse(text);
+                        if (!data || typeof data !== 'object' || !data.sheets) {
+                            throw new Error('รูปแบบไฟล์ไม่ถูกต้อง — คาดว่าเป็น SE workbook (.se / .se.json / .univer.json) หรือ Excel (.xlsx / .xls)');
+                        }
                     }
                     sheetState.mounted = false;
                     mountUniver(data, `เปิดจากไฟล์: ${file.name}`);
@@ -2573,13 +3676,18 @@
             input.click();
         }
 
-        function saveSheetXlsx() {
+        async function saveSheetXlsx() {
             const snapshot = getCurrentUniverSnapshot();
             if (!snapshot || !snapshot.sheets) {
                 alert('ยังไม่มี workbook ให้บันทึก');
                 return;
             }
             try {
+                // First Save-XLSX click triggers the SheetJS CDN fetch.
+                // Show the overlay so the user knows we're not frozen.
+                setSheetOverlay(true, 'กำลังโหลด SheetJS...');
+                await loadSheetJsAssets();
+                setSheetOverlay(true, 'กำลังเขียนไฟล์ .xlsx...');
                 const sheetId = (snapshot.sheetOrder && snapshot.sheetOrder[0]) ||
                                 Object.keys(snapshot.sheets)[0];
                 const sheet = snapshot.sheets[sheetId];
@@ -2626,13 +3734,10 @@
             } catch (e) {
                 console.error(e);
                 alert('บันทึก .xlsx ไม่สำเร็จ: ' + (e && e.message || e));
+            } finally {
+                setSheetOverlay(false);
             }
         }
-
-        document.getElementById('sheetNewBtn').addEventListener('click', newFromData);
-        document.getElementById('sheetOpenBtn').addEventListener('click', openSheetJson);
-        document.getElementById('sheetSaveBtn').addEventListener('click', saveSheetJson);
-        document.getElementById('sheetSaveXlsxBtn').addEventListener('click', saveSheetXlsx);
 
         window.addEventListener('beforeunload', (e) => {
             if (sheetState.dirty) {
@@ -2671,10 +3776,16 @@
             abortController = new AbortController();
             const formData = new FormData(this);
 
+            // CSRF token comes from the <meta> in <head>; server validates
+            // every state-changing POST against the per-session token in
+            // the Flask session cookie.
+            const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
+
             try {
                 const res = await fetch('/fetch-stream', {
                     method: 'POST',
                     body: formData,
+                    headers: { 'X-CSRF-Token': csrfToken },
                     signal: abortController.signal,
                 });
 
@@ -2701,9 +3812,17 @@
                         const payload = JSON.parse(dataStr);
 
                         if (eventType === 'progress') {
-                            const pct = payload.total > 0 ? Math.round((payload.fetched / payload.total) * 100) : 0;
+                            // Clamp pct to 100 — backend total is an
+                            // extrapolated estimate, so late chunks can
+                            // briefly push fetched past total when their
+                            // actual size exceeds the average.
+                            const pct = payload.total > 0
+                                ? Math.min(100, Math.round((payload.fetched / payload.total) * 100))
+                                : 0;
                             progressFill.style.width = pct + '%';
-                            progressText.textContent = `Page ${payload.page} — ${payload.fetched.toLocaleString()}/${payload.total.toLocaleString()} records (${pct}%)`;
+                            progressText.textContent =
+                                `Chunk ${payload.chunks_done}/${payload.chunks_total} — ` +
+                                `${payload.fetched.toLocaleString()}/${payload.total.toLocaleString()} records (${pct}%)`;
                         } else if (eventType === 'error') {
                             throw new Error(payload.error);
                         } else if (eventType === 'done') {
