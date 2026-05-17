@@ -149,9 +149,12 @@
 
     <script>
         // Honour the persisted theme so the login page matches the rest of
-        // the app (theme is set from the main view; default is dark).
-        const saved = localStorage.getItem('se_theme');
-        if (saved === 'light') document.body.classList.add('light');
+        // the app (theme is set from the main view; default is light).
+        // Only switch to dark when the user has explicitly chosen it —
+        // missing localStorage means "default" which is light.
+        if (localStorage.getItem('se_theme') !== 'dark') {
+            document.body.classList.add('light');
+        }
     </script>
 </body>
 </html>

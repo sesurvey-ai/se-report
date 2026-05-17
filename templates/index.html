@@ -1106,7 +1106,7 @@
             themeIcon.innerHTML = theme === 'light' ? MOON_SVG : SUN_SVG;
             localStorage.setItem('se_theme', theme);
         }
-        applyTheme(localStorage.getItem('se_theme') || 'dark');
+        applyTheme(localStorage.getItem('se_theme') || 'light');
 
         document.getElementById('themeToggle').addEventListener('click', () => {
             applyTheme(document.body.classList.contains('light') ? 'dark' : 'light');
