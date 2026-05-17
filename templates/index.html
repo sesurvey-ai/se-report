@@ -4086,8 +4086,25 @@
                     setSheetOverlay(true, 'กำลังสร้าง PDF...');
                 }
 
-                const sheetId = (snapshot.sheetOrder && snapshot.sheetOrder[0])
-                    || Object.keys(snapshot.sheets)[0];
+                // Honour the user's active tab in Univer — ask the
+                // facade which sheet is current, and only fall back to
+                // sheet[0] if the API isn't available. Without this,
+                // switching to "Sheet2" then Print would still PDF
+                // Sheet1 every time.
+                let sheetId;
+                try {
+                    const fWb = sheetState.univerAPI
+                        && sheetState.univerAPI.getActiveWorkbook();
+                    const fSh = fWb && fWb.getActiveSheet
+                        && fWb.getActiveSheet();
+                    if (fSh && typeof fSh.getSheetId === 'function') {
+                        sheetId = fSh.getSheetId();
+                    }
+                } catch (e) { /* fall through to fallback */ }
+                if (!sheetId || !snapshot.sheets[sheetId]) {
+                    sheetId = (snapshot.sheetOrder && snapshot.sheetOrder[0])
+                        || Object.keys(snapshot.sheets)[0];
+                }
                 const sheet = snapshot.sheets[sheetId];
                 const cellData = (sheet && sheet.cellData) || {};
                 const workbookStyles = snapshot.styles || {};
@@ -5297,54 +5314,76 @@
             const snapshot = getCurrentUniverSnapshot();
             if (!snapshot || !snapshot.sheets) return null;
             await loadSheetJsAssets();
-            const sheetId = (snapshot.sheetOrder && snapshot.sheetOrder[0]) ||
-                            Object.keys(snapshot.sheets)[0];
-            const sheet = snapshot.sheets[sheetId];
-            const cellData = (sheet && sheet.cellData) || {};
             const workbookStyles = snapshot.styles || {};
-            // Sparse walk — avoids the ~2.5M-string dense pre-fill that a
-            // 50k×49 workbook would otherwise need; iterate only the cells
-            // that actually exist. Cells with style-only content (empty
-            // value but a border / fill / etc) are emitted too so the
-            // formatting survives — without that, a fully-bordered empty
-            // template row would lose its outline on save.
-            const ws = {};
-            let maxR = -1, maxC = -1;
-            for (const rkey in cellData) {
-                if (!Object.prototype.hasOwnProperty.call(cellData, rkey)) continue;
-                const ri = +rkey;
-                const rowCells = cellData[rkey];
-                for (const ckey in rowCells) {
-                    if (!Object.prototype.hasOwnProperty.call(rowCells, ckey)) continue;
-                    const ci = +ckey;
-                    const cell = rowCells[ckey];
-                    const v = cell && cell.v;
-                    const hasValue = !(v === null || v === undefined || v === '');
-                    const xs = cell && cell.s
-                        ? _univerStyleToXlsx(cell.s, workbookStyles)
-                        : null;
-                    if (!hasValue && !xs) continue;
-                    if (ri > maxR) maxR = ri;
-                    if (ci > maxC) maxC = ci;
-                    const addr = XLSX.utils.encode_cell({ r: ri, c: ci });
-                    const xCell = {};
-                    if (hasValue) {
-                        xCell.v = v;
-                        xCell.t = (typeof v === 'number' && Number.isFinite(v)) ? 'n' : 's';
-                    } else {
-                        // Style-only cell — emit an empty string so the
-                        // writer keeps the cell node + applies the style.
-                        xCell.v = '';
-                        xCell.t = 's';
-                    }
-                    if (xs) xCell.s = xs;
-                    ws[addr] = xCell;
-                }
-            }
-            if (maxR < 0 || maxC < 0) return null;
-            ws['!ref'] = XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: maxR, c: maxC } });
             const wb = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(wb, ws, sheet.name || 'Sheet1');
+            // Save EVERY sheet — used to only emit sheetOrder[0], which
+            // meant a multi-sheet workbook lost everything but the first
+            // tab on a save+reopen round-trip.
+            const sheetIds = (snapshot.sheetOrder && snapshot.sheetOrder.length)
+                ? snapshot.sheetOrder
+                : Object.keys(snapshot.sheets);
+            let totalCells = 0;
+            for (let i = 0; i < sheetIds.length; i++) {
+                const sheetId = sheetIds[i];
+                const sheet = snapshot.sheets[sheetId];
+                if (!sheet) continue;
+                const cellData = sheet.cellData || {};
+                // Sparse walk — avoids the ~2.5M-string dense pre-fill that a
+                // 50k×49 workbook would otherwise need; iterate only the cells
+                // that actually exist. Cells with style-only content (empty
+                // value but a border / fill / etc) are emitted too so the
+                // formatting survives — without that, a fully-bordered empty
+                // template row would lose its outline on save.
+                const ws = {};
+                let maxR = -1, maxC = -1;
+                for (const rkey in cellData) {
+                    if (!Object.prototype.hasOwnProperty.call(cellData, rkey)) continue;
+                    const ri = +rkey;
+                    const rowCells = cellData[rkey];
+                    for (const ckey in rowCells) {
+                        if (!Object.prototype.hasOwnProperty.call(rowCells, ckey)) continue;
+                        const ci = +ckey;
+                        const cell = rowCells[ckey];
+                        const v = cell && cell.v;
+                        const hasValue = !(v === null || v === undefined || v === '');
+                        const xs = cell && cell.s
+                            ? _univerStyleToXlsx(cell.s, workbookStyles)
+                            : null;
+                        if (!hasValue && !xs) continue;
+                        if (ri > maxR) maxR = ri;
+                        if (ci > maxC) maxC = ci;
+                        const addr = XLSX.utils.encode_cell({ r: ri, c: ci });
+                        const xCell = {};
+                        if (hasValue) {
+                            xCell.v = v;
+                            xCell.t = (typeof v === 'number' && Number.isFinite(v)) ? 'n' : 's';
+                        } else {
+                            // Style-only cell — emit an empty string so the
+                            // writer keeps the cell node + applies the style.
+                            xCell.v = '';
+                            xCell.t = 's';
+                        }
+                        if (xs) xCell.s = xs;
+                        ws[addr] = xCell;
+                    }
+                }
+                if (maxR < 0 || maxC < 0) continue;
+                ws['!ref'] = XLSX.utils.encode_range({
+                    s: { r: 0, c: 0 }, e: { r: maxR, c: maxC },
+                });
+                // Translate Univer's mergeData → SheetJS's !merges so
+                // merged cells survive the round-trip. Without this,
+                // re-opening the saved xlsx would show the title row
+                // unmerged with the text overflowing into the next cell.
+                const merges = (sheet.mergeData || []).map(m => ({
+                    s: { r: m.startRow, c: m.startColumn },
+                    e: { r: m.endRow, c: m.endColumn },
+                }));
+                if (merges.length) ws['!merges'] = merges;
+                XLSX.utils.book_append_sheet(wb, ws, sheet.name || `Sheet${i + 1}`);
+                totalCells++;
+            }
+            if (totalCells === 0) return null;
             const arrBuf = XLSX.write(wb, { type: 'array', bookType: 'xlsx' });
             return new Blob([arrBuf], {
                 type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
