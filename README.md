@@ -78,7 +78,7 @@
 **Tuning constants** (ใน `app.py`):
 
 ```python
-APP_VERSION = '1.4.0'                          # แสดงที่ login page footer
+APP_VERSION = '1.5.0'                          # แสดงที่ login page footer
 
 CHUNK_DAYS = 30                                # ซอยช่วงวันที่เป็นก้อนละ 30 วัน
 PAGE_LIMIT = 5000                              # records ต่อ 1 request ของ iSurvey
@@ -219,3 +219,8 @@ docker run -p 5000:5000 --env-file .env se-report
 - [x] **Lazy-load SheetJS** (~1.4 MB) — โหลดเฉพาะตอนกด Export / Save XLSX / Open .xlsx; first paint ของ table view เร็วขึ้นทันที
 - [x] **Excel import (.xlsx / .xls)** — ปุ่ม Open รับทั้ง `.univer.json` และ Excel; แปลง SheetJS workbook → Univer (values + formulas + merged cells; styles หายเพราะ SheetJS community ไม่อ่าน)
 - [x] **Fast-mode user icon** — username ใน `FAST_MODE_USERS` แสดงไอคอน ⚡ สีอำพันแทนรูปคน
+- [x] **Row-coherent Sort** — intercept Univer's `sort-range-asc/desc` แล้วเรียงทั้ง data region โดยใช้คอลัมน์ที่เลือกเป็น sort key (Univer's `-ext` auto-expand fail กับ sparse cellData ของเรา → row integrity แตก)
+- [x] **Sheet ribbon ปรับให้ flat ขึ้น** — ย้าย Insert (image/hyperlink) + Data tools (filter/sort/find/table/dv/cf/text-to-number) มาที่ Start tab + ซ่อน Insert/Data tabs; tab labels เปลี่ยนเป็นไทย (`เมนู / สูตร / โฟกัส`)
+- [x] **Empty state Open button** — ปุ่ม Open ใน Sheet view โผล่ตั้งแต่ยังไม่มี data (ก่อนหน้านี้ปุ่มอยู่ใน Univer ribbon ที่ render ก็ต่อเมื่อ workbook ถูก mount)
+- [x] **xlsx Excel Tables import** — lazy-load JSZip + parse `xl/tables/*.xml` + `xl/worksheets/_rels/sheet{N}.xml.rels` → SHEET_TABLE_PLUGIN resource → Univer's table preset render ครบ (filter dropdown + alternating stripes)
+- [x] **xlsx cell styles import** — walk `xl/styles.xml` + `xl/worksheets/sheet*.xml` เอง (SheetJS CE ทิ้ง `s` indices) ครอบคลุม **borders (style + color)**, **fills**, **fonts (bold/italic/underline/strike/color/size/family)**, **alignment (horizontal/vertical/wrap)**; border enum verify จาก `window.UniverCore.BorderStyleTypes` runtime

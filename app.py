@@ -44,7 +44,7 @@ def _jdumps(obj):
 
 # Bumped when releasing user-visible changes; displayed in the login footer
 # so admins can confirm which build is live without checking the server.
-APP_VERSION = '1.4.0'
+APP_VERSION = '1.5.0'
 
 # Tuning constants for parallel chunk fetching.
 # iSurvey rate-limits concurrent connections; 8 workers failed in prior tests.
